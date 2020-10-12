@@ -1,0 +1,1689 @@
+package compilador;
+
+import exceptions.SymbolTableException;
+import exceptions.ComparisionException;
+import exceptions.StackException;
+import exceptions.SyntaxException;
+import exceptions.ValueTypeException;
+import java.util.ArrayList;
+import java.io.File;
+import exceptions.IntermediateCodeException;
+import data.AccesoFichero;
+
+
+
+import java_cup.runtime.*;
+
+class Parser;
+
+parser code {:
+
+	/**
+	 * Trabajo de Final de Grado
+	 * Alumna: Maria del Mar Cardona Aranda
+	 * Tutor: Pere Palmer
+	 * Curso: 2019-2020
+	 */
+    
+    /**
+     * Scanner. Análisis sintáctico.
+     */
+    private Scanner scanner;
+    /**
+     * Tabla de símbolos.
+     */
+    private TablaDeSimbolos ts;
+    /**
+     * Nombre del programa principal.
+     * Main program.
+     */
+    private String mainProgram;
+    /**
+     * Directorio del proyecto.
+     */
+    private String projectPath;
+	/**
+	 * Vector de entrada.
+	 */
+	private String entVector;
+    /**
+     * Lista del código de 3 direcciones.
+     */
+    private C3D listCode;
+    /**
+     * Tablas. 
+     * Tabla de variables. 
+     * Tabla de procedimientos.
+     * Tabla de eiquetas.
+     */
+    private Tablas tables; 
+    /**
+	 * Lista de funciones.
+     * Funciones que han sido llamadas antes de ser declaradas.
+	 */
+    private ArrayList<ParserFunc> functions;
+	/**
+	 * Profundidad del condicional.
+     * Se usa para controlar las etiquetas del código intermedio.
+	 */
+	private int ifLevel;
+	 /**
+	 * Etiquetas de condicional.
+	 * Se usa para controlar las etiquetas del if en cada nivel
+     * de profundidad.
+	 */
+	private ArrayList<Integer> ifTags;
+	/**
+	 * Profundidad del bucle.
+     * Se usa para controlar las etiquetas de condicional del código intermedio.
+	 */
+	private int whileLevel;
+	 /**
+     * Etiquetas de bucles.
+     * Se usa para controlar las etiquetas de bucle del código intermedio.
+	 */
+	private ArrayList<Integer> whileTags;
+    /**
+     * Número de ramificas del código.
+     * Contador de ramificas.
+     */
+    private int ramificas;
+    /**
+     * Ramas de cada ramifica.
+     * Contador del número de ramas de cada ramifica.
+     */
+    private ArrayList<Integer> ramas;
+	 	 
+    /**
+     * Parser constructor.
+     *
+     * @param scanner
+     * @param mainProgram
+     * @param projectPath
+     * @param entVector
+     */
+    public Parser(Scanner scanner, String mainProgram, String projectPath, String entVector) {
+        this.scanner = scanner;
+        ts = new TablaDeSimbolos();
+        this.mainProgram = mainProgram;
+        this.projectPath = projectPath;
+        this.entVector = entVector;
+        tables = new Tablas();
+        listCode = new C3D();
+        functions = new ArrayList<>();
+        ifLevel = -1;
+        ifTags = new ArrayList<>();
+        whileLevel = -1;
+        whileTags = new ArrayList<>();
+        ramificas = 0;
+        ramas = new ArrayList<>();
+    }
+
+    /**
+     * Report error.
+     * @param message
+     * @param info 
+     */
+    public void report_fatal_error ( String message , Object info ) throws SyntaxException { 
+        String msg = getMessageError(message, info);
+        System.err.println(msg);
+        throw new SyntaxException("Error: Syntax Exception 1.\n"+msg);
+	}
+	
+	/**
+     * Unrecovered syntax error.
+     * @param cur_token
+     */
+	public void unrecovered_syntax_error(Symbol cur_token) throws SyntaxException {
+		System.out.println(cur_token.toString());
+		throw new SyntaxException("Error: Syntax Exception 2.\n"+cur_token.toString());
+	}
+     
+    /**
+     * Get message error.
+     * @param message
+     * @param info 
+     */
+    private String getMessageError( String message, Object info) {
+        StringBuffer m = new StringBuffer("Error");
+		if (info instanceof java_cup.runtime.Symbol) {
+			java_cup.runtime.Symbol s = ((java_cup.runtime.Symbol) info );
+		if (s.left >= 0) {
+			m.append(" in line "+(s.left+1));
+			if (s.right>=0)
+				m.append(", column "+(s.right+1));
+			}
+		}
+		m.append(" : "+message);
+		return m.toString();
+    }
+        
+:}
+
+scan with {:    return scanner.next_token(); :}
+
+terminal      i, o, programa, accepta, fi, dreta, esquerra, escriure, si, fsi, si_no, llavors, mentre, fer, fmentre, llegir, ramificar, amb, framificar, vector, simbol, tipus_pila, dospunts, openparent, closeparent, coma, blanc, empilar, empilar_par, desempilar, cim, buida, no, abrirllave, cerrarllave, en;
+
+terminal		String relacional, letra, id, binario, numero;
+
+non terminal  Object   PROG, CONTARG, BLOC, DECL, DECLS, TIPO, INS, TERM, DRET, ESQUER, ESCRIU, CD, EXP, CDNO, REPT, RUTINA, RAMIFICA, RAMIFICAS, START, INIT, MAIN, PAR, EMPILA, EMPILAP, DESEMPILA, BUIDA, NOBUIDA, FINAL, PROC, ARGS, INITIF, SINO, MENTRE, BEGIN, BR, AR, EXPR, OP, CONJUNT, SIMB, PALABRA, IDENT;
+
+
+start with START;
+
+START	::= INIT PROG MAIN
+		{:
+			// escribir la tabla de simbolos
+            AccesoFichero af = new AccesoFichero();
+            File tsFile = new File(projectPath + "/build/SymbolsTable.mc");
+            af.writeFile(tsFile, listCode.toString());
+
+            //Calcular desplazamientos y ocupacion
+            tables.calculosDesplazamientoOcupacion();
+
+            // escribir la abla de variables
+            File varsTableFile = new File(projectPath + "/build/VariablesTable.mc");
+            af.writeFile(varsTableFile, tables.variablesTableToString());
+
+            // escribir la tabla de procedimientos
+            File procsTableFile = new File(projectPath + "/build/ProceduresTable.mc");
+            af.writeFile(procsTableFile, tables.proceduresTableToString());
+
+            // escribir la tabla de etiquetas
+            File tagsTableFile = new File(projectPath + "/build/TagsTable.mc");
+            af.writeFile(tagsTableFile, tables.tagsTableToString());
+
+            // directorio del código intermedio
+            File dir = new File(projectPath + "/build/intermediateCode");
+            dir.mkdir();
+
+            // escribir el código de 3 direcciones
+            File f = new File(projectPath + "/build/intermediateCode/c3@.mc");
+            af.writeFile(f, listCode.toString());
+
+            // generar codigo ensamblador
+            listCode.generarCodigoEnsamblador(tables, projectPath, mainProgram, entVector);
+
+            RESULT = "COMPILACIÓN CORRECTA \n\n";
+            RESULT += "El ejecutable en ensamblador puede encontrase en " + projectPath + "\\assembly\\\n";
+
+		:}
+		;
+		
+INIT	::=
+		{:
+			// añadir los tipos a la ts
+            ts.add("simbol", new d(dtipo.dtipus, tsb.ts_simbol, 2, Character.MIN_VALUE, Character.MAX_VALUE));
+            ts.add("vector", new d(dtipo.dtipus, tsb.ts_vector, 0, 1024, 1024));       //2 bytes por caracter, maximo 2kb
+            ts.add("tipus_pila", new d(dtipo.dtipus, tsb.ts_tipus_pila, 0, 1024, 1024));  //2 bytes por caracter, maximo 2kb
+		:}
+		;
+
+IDENT 	::= id:v {: RESULT = (String) v; :}
+		| letra:v {: RESULT = (String) v; :}
+		;
+		
+PROC	::= IDENT:v openparent
+		{:
+			//añadirlo a la tabla de procedimientos y coger su id
+            int pid = tables.addProcedure((String) v, ts.getN(), 0, 0);
+            tables.setLp(pid);
+
+            // añadir la funcion a la ts
+            d d = new d(dtipo.dfunc, tsb.ts_func, 0, 0, 0);
+            d.setR(pid);
+            ts.add((String) v, d);
+
+            //Codigo intermedio
+            listCode.generarCuadruplo(Instruccion.procedure_, null, null, new Operador(pid + "", TipoOperador.ref_proc));
+            listCode.generarCuadruplo(Instruccion.preamble_, null, null, new Operador(pid + "", TipoOperador.ref_proc));
+
+            // si el id es el main program, poner accepta a 0 como primera instruccion del programa
+            if (((String) v).equals(mainProgram)) {
+                // declarar el vector ent
+                tables.addVector(entVector, pid, mainProgram);
+            }
+
+            RESULT = d;
+		:}
+		;
+
+ARGS	::= CONTARG:r
+		{:
+			int id = tables.getLp();
+            String pname = tables.getProcedure(id).getNp();
+
+            ArrayList params = (ArrayList<String>) r;
+            if (pname.equals(mainProgram)) {
+                if (params.size() != 1) {
+                    throw new ComparisionException("Error: Comparision Exception 17.\n"
+                        + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + ".\n"
+                        + "El programa principal '" + mainProgram + "' tiene más de un vector de entrada.");
+                }
+                // puede ser que decida cambiar el nombre del vector de entrada
+                if (!entVector.equals((String) params.get(0))) {
+                    throw new ComparisionException("Error: Comparision Exception 18.\n"
+                        + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + ".\n"
+                        + "El vector de entrada '" + mainProgram + "' debe llamarse '" + entVector + "'.");
+                }
+            } else {
+                // actualizar el numero de parametros
+                tables.updateProcedureParams(id, params.size());
+                for (int i = 0; i < params.size(); i++) {
+                    ts.addParam((String) params.get(i), pname);
+                    // relacionar los parametros
+                    // buscamos una funcion que se llame como este procedimiento
+                    int j = 0;
+                    boolean found = false;
+                    while (j < functions.size() && !found) {
+                        if (params.size() != functions.get(j).getParams().size()) {
+                            throw new ComparisionException("Error: Comparision Exception 19.\n"
+                                + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + ".\n"
+                                + "La llamada al subprograma '" + pname + "' no tiene la cantidad de argumentos especificada.");
+                        }
+                        if (functions.get(j).getNombre().equals(pname)) {
+                            // buscar el vector con nombre de param(i)
+                            Vector vector = tables.findVector(functions.get(j).getParams().get(i), functions.get(j).getProcedureCall());
+                            Parametro param = new Parametro((String) params.get(i), pname);
+                            vector.setParam(param);
+                            found = true;
+                        }
+                        j++;
+                    }
+                }
+            }
+		:}
+		;
+
+PROG 	::= PROG programa PROC:d ARGS PAR DECL BLOC FINAL
+		{:		
+            listCode.generarCuadruplo(Instruccion.endProcedure_, null, null, new Operador(((d) d).getR() + "", TipoOperador.ref_proc));			
+        :}
+      	|
+      	;
+      	
+      	
+MAIN	::= 
+		{:
+			//Comprobamos existencia de la funcion main
+            d def = ts.consult(mainProgram);
+            if (def == null) {
+                throw new SymbolTableException("Error: Symbol Table Exception 1.\n"
+                    + "No se encuentra el programa principal '" + mainProgram + "'.");
+            }
+
+            // rellenar los espacios en blanco
+            listCode.fillBlankSpaces(functions, ts, tables);
+
+            // check there are no blank spaces
+            if (!listCode.checkBlankSpaces()) {
+                throw new IntermediateCodeException("Error: Intermediate Code Exception 1.\n"
+                    + "Se ha producido un error generando el código intermedio.");
+            }
+
+            //Generamos el codigo intermedio
+            listCode.generarCuadruplo(Instruccion.call_, null, null, new Operador(def.getR() + "", TipoOperador.ref_proc));
+            //Modificamos para que sea la primera instruccion
+            listCode.primeraLlamada();
+                
+		:}
+		;
+      	
+PAR		::= closeparent
+		{:
+			// entrar bloque
+			ts.entrarBloque();
+		:}
+		;
+		
+FINAL	::= fi
+		{:
+			//Despues salimos del bloque, donde se borraran las id de este bloque 
+            // y los nombre de los parametros de entrada de la fucion si tiene
+            ts.salirBloque();
+        :}
+		;
+		      	
+CONTARG ::= CONTARG:v1 coma id:v
+		{:
+			ArrayList<String> params = (ArrayList<String>) v1;
+            params.add(v);
+            RESULT = params;
+		:}
+		| id:v
+		{:
+            ArrayList <String> params = new ArrayList<>();
+            params.add(v);
+            RESULT = params;
+		:}
+		| CONTARG:v1 coma letra:v
+		{:
+			ArrayList<String> params = (ArrayList<String>) v1;
+            params.add((String) v);
+            RESULT = params;
+		:}
+		| letra:v
+		{:
+			ArrayList <String> params = new ArrayList<>();
+            params.add(v);
+            RESULT = params;
+		:}
+		;
+
+BLOC 	::=	INS BLOC
+		|
+		;
+		
+DECL	::= DECL:pila DECLS:ids dospunts TIPO:t
+		{:
+			RESULT = false;
+
+			// si no hay pilas declaradas aún pero se va a declarar una
+            if ("tipus_pila".equals((String) t)) {
+                if (((String[]) ids).length != 1) { // mas de una pila declarada
+                    throw new StackException("Error: Stack Exception 1.\n"
+                        + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + ".\n"
+                        + "Se ha declarado más de una pila.");
+                } else if (((String[]) ids).length == 1) {
+                    if (ts.existePila()) {
+                        throw new StackException("Error: Stack Exception 2.\n"
+                            + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + ".\n"
+                            + "Se ha declarado más de una pila.");
+                    }
+                    // DECLARAR PILA
+                    tables.setStack(true);
+                    d def = ts.consult((String) t);
+                    int nvar = tables.addVariable(((String[]) ids)[0], tables.actualProcedure(), def.getSize(), 0, tsb.ts_tipus_pila);
+
+                    //Creamos la variable local y la añadimos a la ts
+                    d var = new d(dtipo.dvar, tsb.ts_tipus_pila, def.getSize(), def.getInfLimit(), def.getSupLimit());
+                    var.setR(nvar);
+                    ts.add(((String[]) ids)[0], var);
+                    RESULT = true;  // hay pila declarada                    
+                }
+            } else {    // declarar los vectores o simbolos
+                tsb tipo = null;
+                switch ((String) t) {
+                    case "simbol":
+                        tipo = tsb.ts_simbol;
+                        // asignar valor 'blanc' por defecto
+
+                        for (String id : (String[]) ids) {
+
+                            //Añadimos la variable a TV
+                            d def = ts.consult((String) t);
+                            int nvar = tables.addVariable(id, tables.actualProcedure(), def.getSize(), 0, tipo);
+
+                            //Creamos variable temporal
+                            int temp = tables.addVariable("t" + tables.getVariablesTableSize(), tables.actualProcedure(), def.getSize(), 0, def.getTsb());
+                            d valor = new d(dtipo.idnulla, def.getTsb(), def.getSize(), def.getInfLimit(), def.getSupLimit());
+                            valor.setR(temp);
+                            //Codigo intermedio
+                            int blanc = '#';
+                            listCode.generarCuadruplo(Instruccion.assig_, new Operador(blanc + "", TipoOperador.val_simbol), null, new Operador(temp + "", TipoOperador.ref_simbol));
+
+                            //Creamos la variable local y la añadimos a la ts
+                            d var = new d(dtipo.dvar, tipo, def.getSize(), def.getInfLimit(), def.getSupLimit());
+                            var.setR(nvar);
+                            ts.add(id, var);
+                            listCode.generarCuadruplo(Instruccion.assig_, new Operador(temp + "", TipoOperador.ref_simbol), null, new Operador(nvar + "", TipoOperador.ref_simbol));
+                        }
+                        break;
+                    case "vector":
+                        // crear el fichero de 2k de'blanc'
+                        for (String id : (String[]) ids) {
+                            // poner el vector en la tabla de vectores
+                            int pid = tables.getLp();
+                            String pname = tables.getProcedure(pid).getNp();
+                            tables.addVector(id, pid, pname);
+                        }
+                        break;
+                }
+            }
+		:}
+		|
+		{:
+			RESULT = false; // no hay pila declarada
+		:}
+		;
+
+DECLS	::= DECLS:ids coma IDENT:v
+		{:
+            // añadir un id mas a la lista de ids existente
+            String[] nids = new String[((String[]) ids).length + 1];
+            for (int i = 0; i < ((String[]) ids).length; i++) {
+                nids[i] = ((String[]) ids)[i];
+            }
+            nids[nids.length - 1] = ((String) v);
+
+            RESULT = nids;
+		:}
+		| IDENT:v
+		{:
+            String ids[] = {((String) v)};
+            RESULT = ids;
+		:}
+		;
+			
+INS		::= DRET
+		| ESQUER
+		| ESCRIU
+		| CD
+		| REPT
+		| RUTINA
+		| RAMIFICA
+		| EMPILA
+		| EMPILAP
+		| DESEMPILA
+		;
+		
+DRET	::= dreta openparent IDENT:v closeparent
+		{:
+			d dvar = ts.consult((String) v);
+            if (dvar != null) {
+                throw new ComparisionException("Error: Comparision Exception 1.\n"
+                    + (String) v + " no es un vector.");
+            }
+
+            Vector vector = tables.findVector((String) v, tables.actualProcedure());
+            if (vector == null) {
+                throw new SymbolTableException("Error: Symbol Table Exception 2.\n"
+                    + "El vector " + (String) v + " no ha sido declarado");
+            }
+
+            // codigo intermedio, hacer un dreta del vector
+            listCode.generarCuadruplo(Instruccion.dreta_, null, null, new Operador(vector.getIdVector() + "", TipoOperador.ref_vector));
+		:}
+		;
+			
+ESQUER	::= esquerra openparent IDENT:v closeparent
+		{:
+			d dvar = ts.consult((String) v);
+            if (dvar != null) {
+                throw new ComparisionException("Error: Comparision Exception 2.\n"
+                    + (String) v + " no es un vector.");
+            }
+
+            Vector vector = tables.findVector((String) v, tables.actualProcedure());
+            if (vector == null) {
+                throw new SymbolTableException("Error: Symbol Table Exception 3.\n"
+                    + "El vector " + (String) v + " no ha sido declarado.");
+            }
+
+            // codigo intermedio, hacer un dreta del vector
+            listCode.generarCuadruplo(Instruccion.esquerra_, null, null, new Operador(vector.getIdVector() + "", TipoOperador.ref_vector));
+
+		:}
+		;
+		
+ESCRIU	::=escriure openparent IDENT:v coma TERM:v1 closeparent
+		{:
+			d dsimbol = ts.consult((String) v);
+            if (dsimbol != null) {
+                if (dsimbol.getTsb() != tsb.ts_simbol) {
+                    throw new SymbolTableException("Error: Symbol Table Exception 4.\n"
+                        + "El identificador '" + (String) v + "' no ha sido declatado.");
+                }
+                // escribir un simbolo
+                d term = (d) v1;
+                // crear la variable temporal con el valor del numero binario
+                int temp = tables.addVariable("t" + tables.getVariablesTableSize(), tables.actualProcedure(), 2, 0, tsb.ts_simbol);
+                // guardar en una variable temporal el valor del TERM
+                listCode.generarCuadruplo(Instruccion.assig_, new Operador(term.getR() + "", TipoOperador.ref_simbol), null, new Operador(temp + "", TipoOperador.ref_simbol));
+                listCode.generarCuadruplo(Instruccion.assig_, new Operador(temp + "", TipoOperador.ref_simbol), null, new Operador(dsimbol.getR() + "", TipoOperador.ref_simbol));
+            } else {
+                Vector vector = tables.findVector((String) v, tables.actualProcedure());
+                if (vector == null) {
+                    throw new SymbolTableException("Error: Symbol Table Exception 4.\n"
+                        + "El identificador '" + (String) v + "' no ha sido declarado.");
+                }
+                // escribir un vector
+                d term = (d) v1;
+                listCode.generarCuadruplo(Instruccion.escriure_, new Operador(term.getR() + "", TipoOperador.ref_simbol), null, new Operador(vector.getIdVector() + "", TipoOperador.ref_vector));
+            }
+		:}
+		| escriure openparent accepta coma binario:v closeparent
+		{:
+			if (!"0".equals((String) v) && !"1".equals((String) v)) {
+                throw new ValueTypeException("Error: Value Type Exception 1.\n"
+                    + "'accepta' debe tomar un valor binario.");
+            }
+            int simbol = v.charAt(0);
+            // crear la variable temporal con el valor del numero binario
+            int temp = tables.addVariable("t" + tables.getVariablesTableSize(), tables.actualProcedure(), 2, 0, tsb.ts_simbol);
+            // guardar en una variable temporal el valor del binario
+            listCode.generarCuadruplo(Instruccion.assig_, new Operador(simbol + "", TipoOperador.val_simbol), null, new Operador(temp + "", TipoOperador.ref_simbol));
+            // guardar la variable temporal en la direccion de accepta
+            listCode.generarCuadruplo(Instruccion.assig_, new Operador(temp + "", TipoOperador.ref_simbol), null, new Operador("accepta", TipoOperador.ref_simbol));
+		:}
+		;
+
+CD		::= si INITIF llavors BLOC CDNO fsi
+		{:
+			 /*   cuando llegamos aqui ya se ha ejecutado la produccion INITIF,
+                la producción BLOC y la produccion CDNO 
+            */
+            // nombre de t3
+            int t3_numero = ifTags.get(ifLevel) + 2;
+            String t3_name = "t_if_" + ifLevel + "_" + t3_numero;
+            // goto t3
+            listCode.generarCuadruplo(Instruccion.goto_, null, null, new Operador(t3_name, null));
+            // t3: skip
+            listCode.generarCuadruplo(Instruccion.skip_, null, null, new Operador(t3_name, null));
+
+            // salir del nivel del if
+            ifTags.set(ifLevel, ifTags.get(ifLevel) + 3);
+            ifLevel--;
+            listCode.generarCuadruplo(Instruccion.endif_, null, null, null);
+		:}
+		;
+
+INITIF	::= EXP:exprs
+	    {:
+			
+			// entrar en nuevo nivel de if
+            ifLevel++;
+            if (ifTags.size() == ifLevel) { // si en ese nivel no se ha estado aún, añadirlo
+                ifTags.add(0);
+            }
+
+            ArrayList<Integer> expresiones = (ArrayList<Integer>) exprs;
+
+			int operator = 0;
+			for (Integer exp: expresiones) {
+				if (exp < 0 && operator == 0) {
+					operator = exp;
+				} else if (exp < 0 && operator != exp) {
+					throw new ComparisionException("Error: Comparision Exception 21.\n"
+                    + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                    + "Se han encontrado operadores diferentes en la expresión del condicional.");
+				}
+			}
+
+            // creamos las etiquetas de este nivel
+            Etiqueta t1 = new Etiqueta("t_if_" + ifLevel + "_" + ifTags.get(ifLevel), tables.actualProcedure());
+            tables.addTag(t1);
+            Etiqueta t2 = new Etiqueta("t_if_" + ifLevel + "_" + (ifTags.get(ifLevel) + 1), tables.actualProcedure());
+            tables.addTag(t2);
+            Etiqueta t3 = new Etiqueta("t_if_" + ifLevel + "_" + (ifTags.get(ifLevel) + 2), tables.actualProcedure());
+            tables.addTag(t3);
+
+            
+            switch (operator) {
+				case 0:		// caso normal, solo hay 1 operador           			
+            		// if exp goto t1
+            		listCode.generarCuadruplo(Instruccion.if_,
+                		new Operador(expresiones.get(0) + "", TipoOperador.ref_simbol), null, new Operador(t1.getNombre(), null));
+            		// goto t2
+            		listCode.generarCuadruplo(Instruccion.goto_, null, null, new Operador(t2.getNombre(), null));
+            		// t1: skip
+            		listCode.generarCuadruplo(Instruccion.skip_, null, null, new Operador(t1.getNombre(), null));
+					break;
+				case -1: 	// operador and
+					for (Integer exp: expresiones) {
+						if (exp > 0) {
+							// if EXP goto t1
+            				listCode.generarCuadruplo(Instruccion.ifnot_, new Operador(exp + "", TipoOperador.ref_simbol), null, new Operador(t2.getNombre(), null));
+						}
+						// goto t1
+            			listCode.generarCuadruplo(Instruccion.goto_, null, null, new Operador(t1.getNombre(), null));
+            			// t1: skip
+            			listCode.generarCuadruplo(Instruccion.skip_, null, null, new Operador(t1.getNombre(), null));
+						break;
+					}
+					break;
+				case -2:	// operador or
+					for (Integer exp: expresiones) {
+						if (exp > 0) {
+							// if EXP goto t1
+            				listCode.generarCuadruplo(Instruccion.if_, new Operador(exp + "", TipoOperador.ref_simbol), null, new Operador(t1.getNombre(), null));
+						}
+						// goto t2
+            			listCode.generarCuadruplo(Instruccion.goto_, null, null, new Operador(t2.getNombre(), null));
+            			// t1: skip
+            			listCode.generarCuadruplo(Instruccion.skip_, null, null, new Operador(t1.getNombre(), null));
+						break;
+					}
+					break;
+			}
+
+		:}
+        ;
+ 
+
+CDNO	::= si_no SINO BLOC
+		{:
+            listCode.generarCuadruplo(Instruccion.sino_, null, null, null);
+            RESULT = true; // devolvemos true, como que ha habido "else"
+		:}
+		| SINO
+		{:
+            RESULT = false; // devolvemos false, como que no ha habido "else"
+		:}
+		;
+		
+SINO 	::=
+		{:
+			// calcular t2 y t3
+            int t2_numero = ifTags.get(ifLevel) + 1;
+            int t3_numero = ifTags.get(ifLevel) + 2;
+            String t2_name = "t_if_" + ifLevel + "_" + t2_numero;
+            String t3_name = "t_if_" + ifLevel + "_" + t3_numero;
+
+            // goto t3
+            listCode.generarCuadruplo(Instruccion.goto_, null, null, new Operador(t3_name, null));
+            // t2: skip
+            listCode.generarCuadruplo(Instruccion.skip_, null, null, new Operador(t2_name, null));
+        :}
+		;
+
+REPT	::= BEGIN MENTRE fer BLOC fmentre
+		{:
+			// fin del mentre
+            int t0_tag = whileTags.get(whileLevel);
+            int t2_tag = whileTags.get(whileLevel) + 2;
+            String t0_name = "t_while_" + whileLevel + "_" + t0_tag;
+            String t2_name = "t_while_" + whileLevel + "_" + t2_tag;
+            // goto t0
+            listCode.generarCuadruplo(Instruccion.goto_, null, null, new Operador(t0_name, null));
+            // t2: skip
+            listCode.generarCuadruplo(Instruccion.skip_, null, null, new Operador(t2_name, null));
+            whileTags.set(whileLevel, whileTags.get(whileLevel) + 3);
+            whileLevel--;
+		:}
+		;
+		
+BEGIN	::= mentre
+		{:
+			// entrar en nuevo nivel de while
+            whileLevel++;
+            if (whileTags.size() == whileLevel) {   // si en ese nivel no se ha estado aún, añadirlo
+                whileTags.add(0);
+            }
+
+            // crear las etiquetas
+            Etiqueta tw1 = new Etiqueta("t_while_" + whileLevel + "_" + whileTags.get(whileLevel), tables.actualProcedure());
+            tables.addTag(tw1);
+            Etiqueta tw2 = new Etiqueta("t_while_" + whileLevel + "_" + (whileTags.get(whileLevel) + 1), tables.actualProcedure());
+            tables.addTag(tw2);
+            Etiqueta tw3 = new Etiqueta("t_while_" + whileLevel + "_" + (whileTags.get(whileLevel) + 2), tables.actualProcedure());
+            tables.addTag(tw3);
+
+            int t0_tag = whileTags.get(whileLevel);
+            String t0_name = "t_while_" + whileLevel + "_" + t0_tag;
+            // t0: skip
+            listCode.generarCuadruplo(Instruccion.skip_, null, null, new Operador(t0_name, null));
+		:}
+		;		
+		
+MENTRE	::= EXP:exprs 
+		{:
+			ArrayList<Integer> expresiones = (ArrayList<Integer>) exprs;
+
+			int operator = 0;
+			for (Integer exp: expresiones) {
+				if (exp < 0 && operator == 0) {
+					operator = exp;
+				} else if (exp < 0 && operator != exp) {
+					throw new ComparisionException("Error: Comparision Exception 20.\n"
+                    + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                    + "Se han encontrado operadores diferentes en la expresión del bucle.");
+				}
+			}
+
+			int t0_tag = whileTags.get(whileLevel);
+            int t1_tag = whileTags.get(whileLevel) + 1;
+            int t2_tag = whileTags.get(whileLevel) + 2;
+            String t0_name = "t_while_" + whileLevel + "_" + t0_tag;
+            String t1_name = "t_while_" + whileLevel + "_" + t1_tag;
+            String t2_name = "t_while_" + whileLevel + "_" + t2_tag;
+
+			switch (operator) {
+				case 0:		// caso normal, solo hay 1 operador           			
+            		// if EXP goto t1
+            		listCode.generarCuadruplo(Instruccion.if_, new Operador(expresiones.get(0) + "", TipoOperador.ref_simbol), null, new Operador(t1_name, null));
+            		// goto t2
+            		listCode.generarCuadruplo(Instruccion.goto_, null, null, new Operador(t2_name, null));
+            		// t1: skip
+            		listCode.generarCuadruplo(Instruccion.skip_, null, null, new Operador(t1_name, null));
+					break;
+				case -1: 	// operador and
+					for (Integer exp: expresiones) {
+						if (exp > 0) {
+							// if EXP goto t1
+            				listCode.generarCuadruplo(Instruccion.ifnot_, new Operador(exp + "", TipoOperador.ref_simbol), null, new Operador(t2_name, null));
+						}
+						// goto t1
+            			listCode.generarCuadruplo(Instruccion.goto_, null, null, new Operador(t1_name, null));
+            			// t1: skip
+            			listCode.generarCuadruplo(Instruccion.skip_, null, null, new Operador(t1_name, null));
+						break;
+					}
+					break;
+				case -2:	// operador or
+					for (Integer exp: expresiones) {
+						if (exp > 0) {
+							// if EXP goto t1
+            				listCode.generarCuadruplo(Instruccion.if_, new Operador(exp + "", TipoOperador.ref_simbol), null, new Operador(t1_name, null));
+						}
+						// goto t2
+            			listCode.generarCuadruplo(Instruccion.goto_, null, null, new Operador(t2_name, null));
+            			// t1: skip
+            			listCode.generarCuadruplo(Instruccion.skip_, null, null, new Operador(t1_name, null));
+						break;
+					}
+					break;
+			}
+
+			
+
+		:}
+		;
+	
+OP	::= i
+	{:
+		RESULT = Instruccion.and_;
+	:}
+	|	o
+	{:
+		RESULT = Instruccion.or_;
+	:}
+	;	
+		
+EXP	::= EXPR:r
+	{:
+		ArrayList<Integer> expresiones = new ArrayList<Integer>();
+		expresiones.add((Integer) r);
+		RESULT = expresiones;
+	:}
+	|	EXP:exprs OP:op EXPR:expresion
+	{:
+		ArrayList<Integer> expresiones = (ArrayList<Integer>) exprs;
+		switch ((Instruccion) op) {
+			case and_:
+				expresiones.add(-1);
+				break;
+
+			case or_:
+				expresiones.add(-2);
+				break;
+		}
+		
+		expresiones.add((Integer) expresion);
+        RESULT = expresiones;
+	:}
+	;
+	
+			
+EXPR::= TERM:t1 relacional:r TERM:t2
+		{:
+			
+			d term1 = (d) t1;
+            d term2 = (d) t2;
+
+            Instruccion i;
+            if ("=".equals(r)) {
+                i = Instruccion.igual_;
+            } else {
+                i = Instruccion.diferent_;
+            }
+
+            // crear la variable temporal con el valor del numero binario
+            int temp = tables.addVariable("t" + tables.getVariablesTableSize(), tables.actualProcedure(), 2, 0, tsb.ts_simbol);
+
+            // CMP t2-t1 --> temp
+            listCode.generarCuadruplo(i,
+                    new Operador(term1.getR() + "", TipoOperador.ref_simbol),
+                    new Operador(term2.getR() + "", TipoOperador.ref_simbol),
+                    new Operador(temp + "", TipoOperador.ref_simbol));
+
+            // devolver la variable temporal
+            RESULT = temp;
+		:}
+		| BUIDA:r
+		{:
+			RESULT = r;
+		:}
+		| NOBUIDA:r
+		{:
+			RESULT = r;
+		:}
+        | TERM:t1 en abrirllave CONJUNT:elems cerrarllave
+        {:
+            d term1 = (d) t1;
+            // crear la variable temporal
+            int temp = tables.addVariable("t" + tables.getVariablesTableSize(), tables.actualProcedure(), 2, 0, tsb.ts_simbol);
+
+            ArrayList<Integer> elementos = (ArrayList<Integer>) elems;
+            if (elementos.size() == 1) {
+                
+                // CMP t1 = elemento --> temp
+                listCode.generarCuadruplo(Instruccion.igual_,
+                        new Operador(term1.getR() + "", TipoOperador.ref_simbol),
+                        new Operador(elementos.get(0) + "", TipoOperador.ref_simbol),
+                        new Operador(temp + "", TipoOperador.ref_simbol));
+            } else {
+                
+                listCode.generarCuadruplo(Instruccion.igual_,
+                        new Operador(term1.getR() + "", TipoOperador.ref_simbol),
+                        new Operador(elementos.get(0) + "", TipoOperador.ref_simbol),
+                        new Operador(temp + "", TipoOperador.ref_simbol));
+                
+                for (Integer elemento: elementos) {
+                                
+                    // crear la variable temporal
+                    int temp1 = tables.addVariable("t" + tables.getVariablesTableSize(), tables.actualProcedure(), 2, 0, tsb.ts_simbol);
+                
+                    listCode.generarCuadruplo(Instruccion.igual_,
+                            new Operador(term1.getR() + "", TipoOperador.ref_simbol),
+                            new Operador(elemento + "", TipoOperador.ref_simbol),
+                            new Operador(temp1 + "", TipoOperador.ref_simbol));
+                    
+                    int tempOp = tables.addVariable("t" + tables.getVariablesTableSize(), tables.actualProcedure(), 2, 0, tsb.ts_simbol);
+
+                    listCode.generarCuadruplo(Instruccion.or_,
+                            new Operador(temp + "", TipoOperador.ref_simbol),
+                            new Operador(temp1 + "", TipoOperador.ref_simbol),
+                            new Operador(temp + "", TipoOperador.ref_simbol));
+                }
+            }
+
+            // devolver la variable temporal
+            RESULT = temp;
+        :}
+        | | TERM:t1 no en abrirllave CONJUNT:elems cerrarllave
+        {:
+            d term1 = (d) t1;
+            // crear la variable temporal
+            int temp = tables.addVariable("t" + tables.getVariablesTableSize(), tables.actualProcedure(), 2, 0, tsb.ts_simbol);
+
+            ArrayList<Integer> elementos = (ArrayList<Integer>) elems;
+            if (elementos.size() == 1) {
+                
+                // CMP t1 = elemento --> temp
+                listCode.generarCuadruplo(Instruccion.diferent_,
+                        new Operador(term1.getR() + "", TipoOperador.ref_simbol),
+                        new Operador(elementos.get(0) + "", TipoOperador.ref_simbol),
+                        new Operador(temp + "", TipoOperador.ref_simbol));
+            } else {
+                
+                listCode.generarCuadruplo(Instruccion.diferent_,
+                        new Operador(term1.getR() + "", TipoOperador.ref_simbol),
+                        new Operador(elementos.get(0) + "", TipoOperador.ref_simbol),
+                        new Operador(temp + "", TipoOperador.ref_simbol));
+                
+                for (Integer elemento: elementos) {
+                                
+                    // crear la variable temporal
+                    int temp1 = tables.addVariable("t" + tables.getVariablesTableSize(), tables.actualProcedure(), 2, 0, tsb.ts_simbol);
+                
+                    listCode.generarCuadruplo(Instruccion.diferent_,
+                            new Operador(term1.getR() + "", TipoOperador.ref_simbol),
+                            new Operador(elemento + "", TipoOperador.ref_simbol),
+                            new Operador(temp1 + "", TipoOperador.ref_simbol));
+                    
+                    int tempOp = tables.addVariable("t" + tables.getVariablesTableSize(), tables.actualProcedure(), 2, 0, tsb.ts_simbol);
+
+                    listCode.generarCuadruplo(Instruccion.and_,
+                            new Operador(temp + "", TipoOperador.ref_simbol),
+                            new Operador(temp1 + "", TipoOperador.ref_simbol),
+                            new Operador(temp + "", TipoOperador.ref_simbol));
+                }
+            }
+
+            // devolver la variable temporal
+            RESULT = temp;
+        :}
+        | TERM:t1 relacional:r SIMB:t2
+        {:
+            
+            d term1 = (d) t1;
+            d term2 = (d) t2;
+
+            Instruccion i;
+            if ("=".equals(r)) {
+                i = Instruccion.igual_;
+            } else {
+                i = Instruccion.diferent_;
+            }
+
+            // crear la variable temporal con el valor del numero binario
+            int temp = tables.addVariable("t" + tables.getVariablesTableSize(), tables.actualProcedure(), 2, 0, tsb.ts_simbol);
+
+            // CMP t2-t1 --> temp
+            listCode.generarCuadruplo(i,
+                    new Operador(term1.getR() + "", TipoOperador.ref_simbol),
+                    new Operador(term2.getR() + "", TipoOperador.ref_simbol),
+                    new Operador(temp + "", TipoOperador.ref_simbol));
+
+            // devolver la variable temporal
+            RESULT = temp;
+        :}
+		;
+  
+CONJUNT ::= CONJUNT:elems coma letra:v
+        {:
+            ArrayList<Integer> elementos = (ArrayList<Integer>) elems;
+            
+            d def = ts.consult("simbol");
+            //Convertimos string a char
+            String numeroString = (String) v;
+            if (numeroString.length() != 1) {
+                throw new ComparisionException("Error: Comparision Exception 15.\n"
+                    + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                    + numeroString + " debe ser de tipo 'simbol'.");
+            }
+
+            int letra = numeroString.charAt(0);
+            //Comparamos con su limite superior
+            if (letra > def.getSupLimit()) {
+                throw new ComparisionException("Error: Comparision Exception 16.\n"
+                    + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                    + "El valor instroducido de 'simbol' supera el limite superior: " + def.getSupLimit());
+            }
+            //Creamos variable temporal
+            int simbol = tables.addVariable("t" + tables.getVariablesTableSize(), tables.actualProcedure(), def.getSize(), 0, def.getTsb());
+
+            d valor = new d(dtipo.idnulla, def.getTsb(), def.getSize(), def.getInfLimit(), def.getSupLimit());
+            valor.setR(simbol);
+
+            //Codigo intermedio
+            listCode.generarCuadruplo(Instruccion.assig_, new Operador(letra + "", TipoOperador.val_simbol), null, new Operador(simbol + "", TipoOperador.ref_simbol));
+            
+            elementos.add((Integer) simbol);
+            RESULT = elementos;
+        :}
+        |   letra:v
+        {:
+            ArrayList<Integer> elementos = new ArrayList<Integer>();
+            
+            d def = ts.consult("simbol");
+            //Convertimos string a char
+            String numeroString = (String) v;
+            if (numeroString.length() != 1) {
+                throw new ComparisionException("Error: Comparision Exception 15.\n"
+                    + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                    + numeroString + " debe ser de tipo 'simbol'.");
+            }
+
+            int letra = numeroString.charAt(0);
+            //Comparamos con su limite superior
+            if (letra > def.getSupLimit()) {
+                throw new ComparisionException("Error: Comparision Exception 16.\n"
+                    + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                    + "El valor instroducido de 'simbol' supera el limite superior: " + def.getSupLimit());
+            }
+            //Creamos variable temporal
+            int simbol = tables.addVariable("t" + tables.getVariablesTableSize(), tables.actualProcedure(), def.getSize(), 0, def.getTsb());
+
+            d valor = new d(dtipo.idnulla, def.getTsb(), def.getSize(), def.getInfLimit(), def.getSupLimit());
+            valor.setR(simbol);
+
+            //Codigo intermedio
+            listCode.generarCuadruplo(Instruccion.assig_, new Operador(letra + "", TipoOperador.val_simbol), null, new Operador(simbol + "", TipoOperador.ref_simbol));
+            
+            elementos.add((Integer) simbol);
+            RESULT = elementos;
+        :}
+        | CONJUNT:elems coma SIMB:simbol
+        {:
+            ArrayList<Integer> elementos = (ArrayList<Integer>) elems;
+            d term1 = (d) simbol;
+            elementos.add((Integer) term1.getR());
+            RESULT = elementos;
+        :}
+        | SIMB:simbol
+        {:
+            ArrayList<Integer> elementos = new ArrayList<Integer>();
+            d term1 = (d) simbol;
+            elementos.add((Integer) term1.getR());
+            RESULT = elementos;
+        :}
+        ;
+
+TIPO 	::= simbol
+			{:
+				RESULT = "simbol";
+			:}
+		| vector
+			{:
+				RESULT = "vector";
+			:}
+		| tipus_pila
+			{:
+				RESULT = "tipus_pila";
+			:}
+		;	
+		
+RUTINA	::= IDENT:v openparent CONTARG:ids closeparent
+		{:
+			//Comprobamos que existe id
+            d dproc = ts.consult((String) v);
+            if (dproc == null) {
+                // hay que declarar la llamada más adelante
+                ArrayList<String> params = (ArrayList<String>) ids;
+                int idx = listCode.addBlankSpace();
+                ParserFunc func = new ParserFunc(((String) v), idx, params, tables.actualProcedure());
+                functions.add(func);
+            } else {
+                //Comprobamos que unicamente sea una funcion
+                if (dproc.getDtipo() != dtipo.dfunc) {
+                    throw new ComparisionException("Error: Comparision Exception 3.\n"
+                            + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                            + "El identificador '" + (String) v + "' no hace referencia a un subprograma.");
+                }
+                // añadir los parametros
+                ArrayList<String> params = (ArrayList) ids;
+                for (int i = 0; i < params.size(); i++) {
+                    int pid = dproc.getR();
+                    Parametro param = ts.findParam(i, pid);
+                    if (param == null) {
+                        throw new SymbolTableException("Error: Symbol Table Exception 14.\n"
+                            + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                            + "Errpr en el número de parámetros del subprograma '" + ((String) v) + "'.");
+                    }
+                    Vector vector = tables.findVector(params.get(i), tables.actualProcedure());
+                    // intentar enlazarlo con un parametro
+                    if (!ts.linkParam(param, params.get(i), tables.getProcedure(pid).getNp())) {
+                        throw new SymbolTableException("Error: Symbol Table Exception 15.\n"
+                            + "Error producido en  " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                            + "El vector '" + params.get(i) + "' no ha sido encontrado.");
+                    }
+                    // asociar el vector con el parametro
+                    vector.setParam(param);
+                    // codigo intermedio de la llamada
+                    listCode.generarCuadruplo(Instruccion.call_, null, null, new Operador(vector.getIdProcedimiento() + "", TipoOperador.ref_proc));
+                }
+            }
+		:}
+		;
+		
+RAMIFICA ::= RAMIFICAS:r framificar
+		{:
+			String ramifica_tag = "t_end_ramifica_" + ramificas;
+            Etiqueta tag = new Etiqueta(ramifica_tag, tables.actualProcedure());
+            tables.addTag(tag);
+            listCode.generarCuadruplo(Instruccion.skip_, null, null, new Operador(ramifica_tag, null));
+            listCode.generarCuadruplo(Instruccion.framifica_, null, null, new Operador(""+ramificas, null));
+		:}
+		;
+
+RAMIFICAS ::= ramificar BR BLOC amb AR BLOC
+		| RAMIFICAS amb AR BLOC
+		;
+		
+BR		::= 
+		{:
+			// empieza ramifica
+            ramificas++;
+            listCode.generarCuadruplo(Instruccion.ramifica_, null, null, new Operador(""+ramificas, null));
+                    
+            // empieza la rama 1
+            ramas.add(1);
+            String ramifica_tag = "t_ramifica_" + ramificas + "_" + ramas.get(ramas.size() - 1);
+            Etiqueta tag = new Etiqueta(ramifica_tag, tables.actualProcedure());
+            tables.addTag(tag);
+            listCode.generarCuadruplo(Instruccion.skip_, null, null, new Operador(ramifica_tag, null));
+		:}
+		;
+		
+AR		::= 
+		{:
+			// fin de la rama anterior, si se ha ejecutado ir al final
+            String end_tag = "t_end_ramifica_" + ramificas;
+            listCode.generarCuadruplo(Instruccion.goto_, null, null, new Operador(end_tag, null));
+                    
+            // nueva rama en ramifica
+            ramas.set(ramas.size()-1, ramas.get(ramas.size() - 1)+1);
+            String ramifica_tag = "t_ramifica_" + ramificas + "_" + ramas.get(ramas.size() - 1);
+            Etiqueta tag = new Etiqueta(ramifica_tag, tables.actualProcedure());
+            tables.addTag(tag);
+            listCode.generarCuadruplo(Instruccion.skip_, null, null, new Operador(ramifica_tag, null));
+		:}
+		;
+		
+EMPILA	::= empilar openparent IDENT:v coma TERM:t closeparent
+		{:
+			// el id tiene que ser un simbolo
+            // consultar id es tipus_pila
+            d d = ts.consult((String) v);
+            if (d == null) {
+                throw new SymbolTableException("Error: Symbol Table Exception 5.\n"
+                        + "El 'tipus_pila' " + (String) v + " no ha sido declarado.");
+            } else if (d.getTsb() != tsb.ts_tipus_pila) {
+                throw new ComparisionException("Error: Comparision Exception 4.\n"
+                        + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                        + "La variable '" + (String) v + "' debe ser 'tipus_pila'.");
+            }
+
+            d term = (d) t;
+            int temp = tables.addVariable("t" + tables.getVariablesTableSize(), tables.actualProcedure(), 2, 0, tsb.ts_simbol);
+
+            // escribir en una variable temporal el simbolo t
+            listCode.generarCuadruplo(Instruccion.assig_, new Operador(term.getR() + "", TipoOperador.ref_simbol), null, new Operador(temp + "", TipoOperador.ref_simbol));
+
+            // insertar en la pila el valor temporal
+            listCode.generarCuadruplo(Instruccion.empila_, new Operador(temp + "", TipoOperador.ref_simbol), null, null);
+       		
+        :}
+        | empilar openparent IDENT:v coma SIMB:t closeparent
+        {:
+        	// el id tiene que ser un simbolo
+            // consultar id es tipus_pila
+            d d = ts.consult((String) v);
+            if (d == null) {
+                throw new SymbolTableException("Error: Symbol Table Exception 5.\n"
+                        + "El 'tipus_pila' " + (String) v + " no ha sido declarado.");
+            } else if (d.getTsb() != tsb.ts_tipus_pila) {
+                throw new ComparisionException("Error: Comparision Exception 4.\n"
+                        + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                        + "La variable '" + (String) v + "' debe ser 'tipus_pila'.");
+            }
+
+            d term = (d) t;
+            int temp = tables.addVariable("t" + tables.getVariablesTableSize(), tables.actualProcedure(), 2, 0, tsb.ts_simbol);
+            listCode.generarCuadruplo(Instruccion.assig_, new Operador(term.getR() + "", TipoOperador.ref_simbol), null, new Operador(temp + "", TipoOperador.ref_simbol));
+            listCode.generarCuadruplo(Instruccion.empila_, new Operador(temp + "", TipoOperador.ref_simbol), null, null);
+        :}
+		;
+
+SIMB	::= i
+		{:
+			d def = ts.consult("simbol");
+            int temp = tables.addVariable("t" + tables.getVariablesTableSize(), tables.actualProcedure(), 2, 0, tsb.ts_simbol);
+            listCode.generarCuadruplo(Instruccion.assig_, new Operador("'i'", TipoOperador.val_simbol), null, new Operador(temp + "", TipoOperador.ref_simbol));
+            d valor = new d(dtipo.idnulla, def.getTsb(), def.getSize(), def.getInfLimit(), def.getSupLimit());
+            valor.setR(temp);
+            RESULT = valor;
+		:}
+		| o
+		{:
+			d def = ts.consult("simbol");
+			int temp = tables.addVariable("t" + tables.getVariablesTableSize(), tables.actualProcedure(), 2, 0, tsb.ts_simbol);
+            listCode.generarCuadruplo(Instruccion.assig_, new Operador("'o'", TipoOperador.val_simbol), null, new Operador(temp + "", TipoOperador.ref_simbol));
+            d valor = new d(dtipo.idnulla, def.getTsb(), def.getSize(), def.getInfLimit(), def.getSupLimit());
+            valor.setR(temp);
+            RESULT = valor;
+		:}
+		| accepta
+		{:
+			d def = ts.consult("simbol");
+			int temp = tables.addVariable("t" + tables.getVariablesTableSize(), tables.actualProcedure(), def.getSize(), 0, def.getTsb());
+            listCode.generarCuadruplo(Instruccion.assig_, new Operador("accepta", TipoOperador.ref_simbol), null, new Operador(temp + "", TipoOperador.ref_simbol));
+            d valor = new d(dtipo.idnulla, def.getTsb(), def.getSize(), def.getInfLimit(), def.getSupLimit());
+            valor.setR(temp);
+            RESULT = valor;
+		:}
+		;
+
+EMPILAP	::= empilar_par openparent IDENT:v coma id:t closeparent
+		{:
+			// el id tiene que ser un simbolo
+            // consultar id es tipus_pila
+            d d = ts.consult((String) v);
+            if (d == null) {
+                throw new SymbolTableException("Error: Symbol Table Exception 5.\n"
+                    + "El 'tipus_pila' " + (String) v + " no ha sido declarado.");
+            } else if (d.getTsb() != tsb.ts_tipus_pila) {
+                throw new ComparisionException("Error: Comparision Exception 4.\n"
+                    + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                    + "La variable " + (String) v + " debe ser 'tipus_pila'.");
+            }
+
+            for (int i = t.length()-1; i >= 0; i--) {
+                d def = ts.consult("simbol");
+                if (def == null) {
+                    throw new SymbolTableException("Error: Symbol Table Exception 17.\n"
+                        + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                        + "El tipo 'simbol' no existe");
+                }
+                //Convertimos string a char
+                String numeroString = (String) t;
+
+                int letra = numeroString.charAt(i);
+                //Comparamos con su limite superior
+                if (letra > def.getSupLimit()) {
+                    throw new ComparisionException("Error: Comparision Exception 20.\n"
+                        + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                        + "El valor introducido de 'simbol' supera el límite superior: " + def.getSupLimit());
+                }
+                //Creamos variable temporal
+                int temp = tables.addVariable("t" + tables.getVariablesTableSize(), tables.actualProcedure(), def.getSize(), 0, def.getTsb());
+
+                d valor = new d(dtipo.idnulla, def.getTsb(), def.getSize(), def.getInfLimit(), def.getSupLimit());
+                valor.setR(temp);
+
+                //Codigo intermedio
+                listCode.generarCuadruplo(Instruccion.assig_, new Operador(letra + "", TipoOperador.val_simbol), null, new Operador(temp + "", TipoOperador.ref_simbol));
+
+                // insertar en la pila el valor temporal
+                listCode.generarCuadruplo(Instruccion.empila_, new Operador(temp + "", TipoOperador.ref_simbol), null, null);
+            }
+        :}
+        | empilar_par openparent IDENT:v coma SIMB:t closeparent
+        {:
+            d d = ts.consult((String) v);
+            if (d == null) {
+                throw new SymbolTableException("Error: Symbol Table Exception 5.\n"
+                        + "El 'tipus_pila' " + (String) v + " no ha sido declarado.");
+            } else if (d.getTsb() != tsb.ts_tipus_pila) {
+                throw new ComparisionException("Error: Comparision Exception 4.\n"
+                        + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                        + "La variable '" + (String) v + "' debe ser 'tipus_pila'.");
+            }
+
+            d term = (d) t;
+            int temp = tables.addVariable("t" + tables.getVariablesTableSize(), tables.actualProcedure(), 2, 0, tsb.ts_simbol);
+            listCode.generarCuadruplo(Instruccion.assig_, new Operador(term.getR() + "", TipoOperador.ref_simbol), null, new Operador(temp + "", TipoOperador.ref_simbol));
+            listCode.generarCuadruplo(Instruccion.empila_, new Operador(temp + "", TipoOperador.ref_simbol), null, null);
+        :}
+        | empilar_par openparent IDENT:v coma letra:t closeparent
+        {:
+            d d = ts.consult((String) v);
+            if (d == null) {
+                throw new SymbolTableException("Error: Symbol Table Exception 5.\n"
+                        + "El 'tipus_pila' " + (String) v + " no ha sido declarado.");
+            } else if (d.getTsb() != tsb.ts_tipus_pila) {
+                throw new ComparisionException("Error: Comparision Exception 4.\n"
+                        + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                        + "La variable '" + (String) v + "' debe ser 'tipus_pila'.");
+            }
+
+            int temp = tables.addVariable("t" + tables.getVariablesTableSize(), tables.actualProcedure(), 2, 0, tsb.ts_simbol);
+            listCode.generarCuadruplo(Instruccion.assig_, new Operador("'"+(String) t + "'", TipoOperador.val_simbol), null, new Operador(temp + "", TipoOperador.ref_simbol));
+            listCode.generarCuadruplo(Instruccion.empila_, new Operador(temp + "", TipoOperador.ref_simbol), null, null);
+        :}
+        | empilar_par openparent IDENT:v coma PALABRA:t closeparent
+        {:
+        	// el id tiene que ser un simbolo
+            // consultar id es tipus_pila
+            d d = ts.consult((String) v);
+            if (d == null) {
+                throw new SymbolTableException("Error: Symbol Table Exception 5.\n"
+                    + "El 'tipus_pila' " + (String) v + " no ha sido declarado.");
+            } else if (d.getTsb() != tsb.ts_tipus_pila) {
+                throw new ComparisionException("Error: Comparision Exception 4.\n"
+                    + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                    + "La variable " + (String) v + " debe ser 'tipus_pila'.");
+            }
+
+            for (int i = ((String) t).length()-1; i >= 0 ; i--) {
+                d def = ts.consult("simbol");
+                if (def == null) {
+                    throw new SymbolTableException("Error: Symbol Table Exception 17.\n"
+                        + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                        + "El tipo 'simbol' no existe");
+                }
+                //Convertimos string a char
+                String numeroString = (String) t;
+
+                int letra = numeroString.charAt(i);
+                //Comparamos con su limite superior
+                if (letra > def.getSupLimit()) {
+                    throw new ComparisionException("Error: Comparision Exception 20.\n"
+                        + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                        + "El valor introducido de 'simbol' supera el límite superior: " + def.getSupLimit());
+                }
+                //Creamos variable temporal
+                int temp = tables.addVariable("t" + tables.getVariablesTableSize(), tables.actualProcedure(), def.getSize(), 0, def.getTsb());
+
+                d valor = new d(dtipo.idnulla, def.getTsb(), def.getSize(), def.getInfLimit(), def.getSupLimit());
+                valor.setR(temp);
+
+                //Codigo intermedio
+                listCode.generarCuadruplo(Instruccion.assig_, new Operador(letra + "", TipoOperador.val_simbol), null, new Operador(temp + "", TipoOperador.ref_simbol));
+
+                // insertar en la pila el valor temporal
+                listCode.generarCuadruplo(Instruccion.empila_, new Operador(temp + "", TipoOperador.ref_simbol), null, null);
+            }
+        :}
+		;
+
+PALABRA	::= programa 	{: RESULT = "programa"; 	:}
+		| fi 			{: RESULT = "fi"; 			:}
+		| dreta 		{: RESULT = "dreta"; 		:}
+		| esquerra 		{: RESULT = "esquerra"; 	:}
+		| escriure 		{: RESULT = "escriure"; 	:}
+		| si 			{: RESULT = "si";		 	:}
+		| fsi 			{: RESULT = "fsi"; 			:}
+		| si_no 		{: RESULT = "si_no"; 		:}
+		| llavors 		{: RESULT = "llavors"; 		:}
+		| mentre 		{: RESULT = "mentre";	 	:}
+		| fer 			{: RESULT = "fer"; 			:}
+		| fmentre 		{: RESULT = "fmentre";	 	:}
+		| llegir 		{: RESULT = "llegir"; 		:}
+		| ramificar 	{: RESULT = "ramificar"; 	:}
+		| amb 			{: RESULT = "amb"; 			:}
+		| framificar 	{: RESULT = "framificar"; 	:}
+		| vector 		{: RESULT = "vector"; 		:}
+		| simbol 		{: RESULT = "simbol"; 		:}
+		| tipus_pila 	{: RESULT = "tipus_pila"; 	:}
+		| dospunts 		{: RESULT = "dospunts"; 	:}
+		| openparent 	{: RESULT = "openparent"; 	:}
+		| closeparent 	{: RESULT = "closeparent"; 	:}
+		| coma 			{: RESULT = "coma"; 		:}
+		| blanc 		{: RESULT = "blanc";	 	:}
+		| empilar 		{: RESULT = "empilar";	 	:}
+		| empilar_par 	{: RESULT = "empilar_par"; 	:}
+		| desempilar 	{: RESULT = "desempilar"; 	:}
+		| cim 			{: RESULT = "cim"; 			:}
+		| buida 		{: RESULT = "buida"; 		:}
+		| no 			{: RESULT = "no"; 			:}
+		| abrirllave 	{: RESULT = "abrirllave"; 	:}
+		| cerrarllave 	{: RESULT = "cerrarllave"; 	:}
+		| en 			{: RESULT = "en"; 			:}
+		; 
+		
+DESEMPILA ::= desempilar openparent IDENT:v closeparent
+		{:
+			// consultar id es tipus_pila
+            d d = ts.consult((String) v);
+            if (d == null) {
+                throw new SymbolTableException("Error: Symbol Table Exception 6"
+                    + "El 'tipus_pila' " + (String) v + " no ha sido delcarado.");
+            } else if (d.getTsb() != tsb.ts_tipus_pila) {
+                throw new ComparisionException("Error: Comparision Exception 5.\n"
+                    + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                    + "La variable " + (String) v + " debe ser 'tipus_pila'.");
+            }
+
+            // desempilar la pila
+            listCode.generarCuadruplo(Instruccion.desempila_, null, null, null);
+
+		:}
+		;
+		
+BUIDA	::= buida openparent IDENT:v closeparent
+		{:
+			// consultar id es tipus_pila
+            d d = ts.consult((String) v);
+            if (d == null) {
+                throw new SymbolTableException("Error: Symbol Table Exception 7.\n"
+                    + "El 'tipus_pila' " + (String) v + " no ha sido declarado.");
+            } else if (d.getTsb() != tsb.ts_tipus_pila) {
+                throw new ComparisionException("Error: Comparision Exception 6.\n"
+                    + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                    + "La variable " + (String) v + " debe ser 'tipus_pila'.");
+            }
+            
+            d def = ts.consult("simbol");
+            // devolver TRUE si la pila esta vacia
+            int temp = tables.addVariable("t" + tables.getVariablesTableSize(), tables.actualProcedure(), def.getSize(), 0, tsb.ts_simbol);
+
+            // lo guardamos en un simbolo
+            listCode.generarCuadruplo(Instruccion.buida_, new Operador(d.getR() + "", TipoOperador.ref_stack), null, new Operador(temp + "", TipoOperador.ref_simbol));
+
+            RESULT = temp;
+            
+		:}
+		;
+		
+NOBUIDA	::= no buida openparent IDENT:v closeparent
+		{:
+			// consultar id es tipus_pila
+            d d = ts.consult((String) v);
+            if (d == null) {
+                throw new SymbolTableException("Error: Symbol Table Exception 8.\n"
+                    + "El 'tipus_pila' " + (String) v + " no ha sido declarado.");
+            } else if (d.getTsb() != tsb.ts_tipus_pila) {
+                throw new ComparisionException("Error: Comparision Exception 7.\n"
+                    + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                    + "La variable " + (String) v + " debe ser 'tipus_pila'.");
+            }
+
+            d def = ts.consult("simbol");
+            // devolver TRUE si la pila esta vacia
+            int temp = tables.addVariable("t" + tables.getVariablesTableSize(), tables.actualProcedure(), def.getSize(), 0, tsb.ts_simbol);
+
+            // lo guardamos en un simbolo
+            listCode.generarCuadruplo(Instruccion.nobuida_, new Operador(d.getR() + "", TipoOperador.ref_stack), null, new Operador(temp + "", TipoOperador.ref_simbol));
+
+            RESULT = temp;
+            
+		:}
+		;
+		
+TERM	::= letra:v
+		{:
+			d def = ts.consult("simbol");
+            if (def == null) {
+                throw new SymbolTableException("Error: Symbol Table Exception 16.\n"
+                        + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                        + "El tipo 'simbol' no existe");
+            }
+            //Convertimos string a char
+            String numeroString = (String) v;
+            if (numeroString.length() != 1) {
+                throw new ComparisionException("Error: Comparision Exception 15.\n"
+                    + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                    + numeroString + " debe ser de tipo 'simbol'.");
+            }
+
+            int letra = numeroString.charAt(0);
+            //Comparamos con su limite superior
+            if (letra > def.getSupLimit()) {
+                throw new ComparisionException("Error: Comparision Exception 16.\n"
+                    + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                    + "El valor instroducido de 'simbol' supera el limite superior: " + def.getSupLimit());
+            }
+            //Creamos variable temporal
+            int temp = tables.addVariable("t" + tables.getVariablesTableSize(), tables.actualProcedure(), def.getSize(), 0, def.getTsb());
+
+            d valor = new d(dtipo.idnulla, def.getTsb(), def.getSize(), def.getInfLimit(), def.getSupLimit());
+            valor.setR(temp);
+
+            //Codigo intermedio
+            listCode.generarCuadruplo(Instruccion.assig_, new Operador(letra + "", TipoOperador.val_simbol), null, new Operador(temp + "", TipoOperador.ref_simbol));
+
+            RESULT = (d) valor;
+		:}
+		
+		| numero:v	
+		{:
+			d def = ts.consult("simbol");
+            if (def == null) {
+                throw new SymbolTableException("Error: Symbol Table Exception 9.\n"
+                    + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                    + "El tipo 'simbol' no existe.");
+            }
+            //Convertimos string a char
+            String numeroString = (String) v;
+            if (numeroString.length() != 1) {
+                throw new ComparisionException("Error: Comparision Exception 9.\n"
+                    + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                    + numeroString + " debe ser de tipo 'simbol'.");
+            }
+
+            int numero = numeroString.charAt(0);
+            //Comparamos con su limite superior
+            if (numero > def.getSupLimit()) {
+                throw new ComparisionException("Error: Comparision Exception 8.\n"
+                    + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                    + "El valor de 'simbol' excede el límite superior: " + def.getSupLimit());
+            }
+            //Creamos variable temporal
+            int temp = tables.addVariable("t" + tables.getVariablesTableSize(), tables.actualProcedure(), def.getSize(), 0, def.getTsb());
+
+            d valor = new d(dtipo.idnulla, def.getTsb(), def.getSize(), def.getInfLimit(), def.getSupLimit());
+            valor.setR(temp);
+
+            //Codigo intermedio
+            listCode.generarCuadruplo(Instruccion.assig_, new Operador(numero + "", TipoOperador.val_simbol), null, new Operador(temp + "", TipoOperador.ref_simbol));
+
+            RESULT = (d) valor;
+		:}	
+		| binario:v	
+		{:
+			d def = ts.consult("simbol");
+            if (def == null) {
+                throw new SymbolTableException("Error: Symbol Table Exception 9.\n"
+                    + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                    + "El tipo 'simbol' no existe.");
+            }
+            //Convertimos string a char
+            String numeroString = (String) v;
+            if (numeroString.length() != 1) {
+                throw new ComparisionException("Error: Comparision Exception 9.\n"
+                    + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                    + numeroString + " debe ser de tipo 'simbol'.");
+            }
+
+            int numero = numeroString.charAt(0);
+            //Comparamos con su limite superior
+            if (numero > def.getSupLimit()) {
+                throw new ComparisionException("Error: Comparision Exception 8.\n"
+                    + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                    + "El valor de 'simbol' excede el límite superior: " + def.getSupLimit());
+            }
+            //Creamos variable temporal
+            int temp = tables.addVariable("t" + tables.getVariablesTableSize(), tables.actualProcedure(), def.getSize(), 0, def.getTsb());
+
+            d valor = new d(dtipo.idnulla, def.getTsb(), def.getSize(), def.getInfLimit(), def.getSupLimit());
+            valor.setR(temp);
+
+            //Codigo intermedio
+            listCode.generarCuadruplo(Instruccion.assig_, new Operador(numero + "", TipoOperador.val_simbol), null, new Operador(temp + "", TipoOperador.ref_simbol));
+
+            RESULT = (d) valor;
+		:}
+		
+		| blanc
+		{:
+			d def = ts.consult("simbol");
+            if (def == null) {
+                throw new ComparisionException("Error: Comparision Exception 10.\n"
+                    + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                    + "El tipo 'simbol' no existe.");
+            }
+
+            //Creamos variable temporal
+            int temp = tables.addVariable("t" + tables.getVariablesTableSize(), tables.actualProcedure(), def.getSize(), 0, def.getTsb());
+
+            d valor = new d(dtipo.idnulla, def.getTsb(), def.getSize(), def.getInfLimit(), def.getSupLimit());
+            valor.setR(temp);
+
+            //Codigo intermedio
+            int blanc = '#';
+            listCode.generarCuadruplo(Instruccion.assig_, new Operador(blanc + "", TipoOperador.val_simbol), null, new Operador(temp + "", TipoOperador.ref_simbol));
+
+            RESULT = (d) valor;
+		:}
+		
+		| id:v
+		{:
+			// el term es un simbol
+            d def = ts.consult((String) v);
+            if (def == null) {
+                throw new SymbolTableException("Error: Symbol Table Exception 10.\n"
+                    + "El simbol " + (String) v + " no ha sido declarado.");
+            } else if (def.getTsb() != tsb.ts_simbol) {
+                throw new ComparisionException("Error: Comparision Exception 11.\n"
+                    + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                    + (String) v + " debe ser de tipo 'simbol'.");
+            }
+
+            //Creamos variable temporal
+            int temp = tables.addVariable("t" + tables.getVariablesTableSize(), tables.actualProcedure(), def.getSize(), 0, def.getTsb());
+
+            //Codigo intermedio
+            listCode.generarCuadruplo(Instruccion.assig_, new Operador(def.getR() + "", TipoOperador.ref_simbol), null, new Operador(temp + "", TipoOperador.ref_simbol));
+
+            //devolvemos el objeto d
+            d valor = new d(dtipo.idnulla, def.getTsb(), def.getSize(), def.getInfLimit(), def.getSupLimit());
+            valor.setR(temp);
+
+            RESULT = (d) valor;
+		:}
+		
+		| llegir openparent id:v closeparent
+		{:
+            // puede ser simbolo o vector
+            d dsimbol = ts.consult((String) v);
+            if (dsimbol != null) {      // leer simbolo
+                if (dsimbol.getTsb() != tsb.ts_simbol) {
+                    throw new ComparisionException("Error: Comparision Exception 12.\n"
+                        + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                        + "El identificador " + (String) v + " debe ser de tipo 'simbol' o 'vector'.");
+                }
+                //Creamos variable temporal
+                int temp = tables.addVariable("t" + tables.getVariablesTableSize(), tables.actualProcedure(), dsimbol.getSize(), 0, dsimbol.getTsb());
+                //Codigo intermedio
+                listCode.generarCuadruplo(Instruccion.assig_, new Operador(dsimbol.getR() + "", TipoOperador.ref_simbol), null, new Operador(temp + "", TipoOperador.ref_simbol));
+                //devolvemos el objeto d
+                d valor = new d(dtipo.idnulla, dsimbol.getTsb(), dsimbol.getSize(), dsimbol.getInfLimit(), dsimbol.getSupLimit());
+                valor.setR(temp);
+                RESULT = valor;
+            } else {        // leer vector
+                Vector vector = tables.findVector(v, tables.actualProcedure());
+                if (vector == null) {
+                    throw new SymbolTableException("Error: Symbol Table Exception 11.\n"
+                        + "La variable '" + (String) v + "' no ha sido declarada.");
+                }
+                dsimbol = ts.consult("simbol");
+                //Creamos variable temporal
+                int temp = tables.addVariable("t" + tables.getVariablesTableSize(), tables.actualProcedure(), dsimbol.getSize(), 0, dsimbol.getTsb());
+                //Codigo intermedio
+                listCode.generarCuadruplo(Instruccion.llegir_, new Operador(vector.getIdVector() + "", TipoOperador.ref_vector), null, new Operador(temp + "", TipoOperador.ref_simbol));
+                //devolvemos el objeto d
+                d valor = new d(dtipo.idnulla, dsimbol.getTsb(), dsimbol.getSize(), dsimbol.getInfLimit(), dsimbol.getSupLimit());
+                valor.setR(temp);
+                RESULT = valor;
+            }
+		:}
+		
+		| llegir openparent accepta closeparent
+		{:
+			d def = ts.consult("simbol");
+            //Creamos variable temporal donde se guardara el valor de accepta
+            int temp = tables.addVariable("t" + tables.getVariablesTableSize(), tables.actualProcedure(), def.getSize(), 0, def.getTsb());
+            //Codigo intermedio
+            listCode.generarCuadruplo(Instruccion.assig_, new Operador("accepta", TipoOperador.ref_vector), null, new Operador(temp + "", TipoOperador.ref_simbol));
+            //devolvemos el objeto d
+            d valor = new d(dtipo.idnulla, def.getTsb(), def.getSize(), def.getInfLimit(), def.getSupLimit());
+            valor.setR(temp);
+            RESULT = valor;
+		:}
+		
+		| cim openparent IDENT:v closeparent
+		{:
+			// consultar id = tipus_pila
+            d def = ts.consult((String) v);
+            if (def == null) {
+                throw new SymbolTableException("Error: Symbol Table Exception 12.\n"
+                    + (String) v + " no ha sido declarado.");
+            } else if (def.getTsb() != tsb.ts_tipus_pila) {
+                throw new ComparisionException("Error: Comparision Exception 13.\n"
+                    + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                    + (String) v + " debe ser 'tipus_pila'.");
+            }
+
+            //Comprobamos que no sea un metodo
+            if (def.getDtipo() == dtipo.dfunc) {
+                throw new ComparisionException("Error: Comparision Exception 14.\n"
+                    + "Error producido en " + scanner.getYyline() + ":" + scanner.getYycolumn() + "\n"
+                    + "'" + (String) v + "' is una función.");
+            }
+
+            def = ts.consult("simbol");
+            //Creamos variable temporal
+            int temp = tables.addVariable("t" + tables.getVariablesTableSize(), tables.actualProcedure(), def.getSize(), 0, def.getTsb());
+
+            //Codigo intermedio
+            listCode.generarCuadruplo(Instruccion.cim_, null, null, new Operador(temp + "", TipoOperador.ref_simbol));
+
+            //devolvemos el objeto d
+            d valor = new d(dtipo.idnulla, def.getTsb(), def.getSize(), def.getInfLimit(), def.getSupLimit());
+            valor.setR(temp);
+
+            RESULT = (d) valor;
+		:}
+		;
+		
+
+
+
+
+
+
+
+

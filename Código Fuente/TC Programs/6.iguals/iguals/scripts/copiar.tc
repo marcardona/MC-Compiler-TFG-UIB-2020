@@ -1,0 +1,15 @@
+programa copiar (ent, copia) 
+mentre llegir(ent) /= # fer
+	escriure(copia, llegir(ent))
+	dreta(ent)
+	dreta(copia)
+fmentre
+esquerra(ent)
+esquerra(copia)
+mentre llegir(ent) /= # fer
+	esquerra(ent)
+	esquerra(copia)
+fmentre
+dreta(ent)
+dreta(copia)
+fi

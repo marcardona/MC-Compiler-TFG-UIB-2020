@@ -1,0 +1,2 @@
+error: exceptions.SymbolTableException: Error: Symbol Table Exception 4.
+El identificador 'par' no ha sido declarado.

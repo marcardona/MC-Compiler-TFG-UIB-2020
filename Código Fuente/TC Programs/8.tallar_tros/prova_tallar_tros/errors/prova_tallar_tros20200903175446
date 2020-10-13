@@ -1,0 +1,2 @@
+error: exceptions.SymbolTableException: Error: Symbol Table Exception 16.
+El subprograma 'tallar_tros' no ha sido declarado.

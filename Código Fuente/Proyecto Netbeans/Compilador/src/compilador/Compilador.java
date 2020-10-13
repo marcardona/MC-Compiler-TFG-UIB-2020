@@ -53,7 +53,7 @@ public class Compilador implements userInterface.compiladorInterface {
         try {
             input = new FileReader(sourceCode);
             SymbolFactory sf = new ComplexSymbolFactory();
-            Scanner scanner = new Scanner(input);
+            Scanner scanner = new Scanner(input, data);
             Parser parser = new Parser(scanner, data.getNombreProyecto(), data.getProjectPath(), data.getNombreVectorEnt());
             Symbol result = parser.parse();
             

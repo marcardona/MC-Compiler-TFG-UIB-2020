@@ -1,0 +1,1079 @@
+00001000 Starting Address
+Assembler used: EASy68K Editor/Assembler v5.16.01
+Created On: 04/05/2020 19:31:44
+
+00000000                             1  *------------------------------------------------------------
+00000000                             2  * Title      : CODIGO ENSAMBLADOR DE iguals 
+00000000                             3  * Date       : Mon May 04 19:31:25 CEST 2020
+00000000                             4  * Description: Codigo ensamblador
+00000000                             5  *------------------------------------------------------------
+00000000                             6  
+00000000                             7  *************************************************************
+00000000                             8  *                             MACROS                         *
+00000000                             9  *************************************************************
+00000000                            10      INCLUDE "macros/macros.X68"                                   
+00000000                            11  
+00000000                            12  
+00000000                            13  LOAD_ENT    MACRO
+00000000                            14  * Macro to reads 1 word from the vector address             
+00000000                            15  * Parameters:     \1: ent file adress                      
+00000000                            16  *                 \2: ent vector adress* Modifies  : D0, D1, D2, D3, A1                            
+00000000                            17  * Always executed after trap 51, 52 or 55                   
+00000000                            18  *-----------------------------------------------------------
+00000000                            19      ; open existing file                                    
+00000000                            20      LEA.L   \1,A1                                          
+00000000                            21      MOVE.L  #51,D0                                          
+00000000                            22      TRAP    #15                                             
+00000000                            23      ; read file                                             
+00000000                            24      CLR.L   D2                                              
+00000000                            25      CLR.L   D3                                              
+00000000                            26      LEA.L   \2,A1                                          
+00000000                            27      WHILE.W #1024 <GT> D3 DO.S                              
+00000000                            28          MOVE.W  D3,D2                                       
+00000000                            29          ; set cursor                                        
+00000000                            30          MOVE.L  #55,D0                                      
+00000000                            31          TRAP    #15                                         
+00000000                            32          MOVE.W  #0,(A1)                                     
+00000000                            33          MOVE.L  #1,D2                                       
+00000000                            34          MOVE.L  #53,D0                                      
+00000000                            35          TRAP    #15                                         
+00000000                            36          ADD.W   #1,D3                                       
+00000000                            37          ADD.L   #2,A1                                       
+00000000                            38      ENDW                                                    
+00000000                            39      ; close file                                            
+00000000                            40      MOVE.L  #50,D0                                          
+00000000                            41      TRAP    #15                                             
+00000000                            42      ENDM                                                    
+00000000                            43  
+00000000                            44  SAVE_ENT     MACRO
+00000000                            45  * Macro to reads 1 word from the vector address             
+00000000                            46  * Parameters:     \1: ent file adress                      
+00000000                            47  *                 \2: ent vector adress* Modifies  : D0, D1, D2, A1                                
+00000000                            48  * Always executed after trap 51, 52 or 55                   
+00000000                            49  *-----------------------------------------------------------
+00000000                            50     CLR.L  D3                                                
+00000000                            51      ; open existing file                                    
+00000000                            52      LEA.L   \1,A1                                          
+00000000                            53      MOVE.L  #51,D0                                          
+00000000                            54      TRAP    #15                                             
+00000000                            55      LEA.L   \2,A1                                          
+00000000                            56      WHILE.W #1023 <GT> D3 DO.S                              
+00000000                            57          MOVE.L  D3,D2                                       
+00000000                            58          ; set cursor                                        
+00000000                            59          MOVE.L  #55,D0                                      
+00000000                            60          TRAP    #15                                         
+00000000                            61          ; write file                                        
+00000000                            62          MOVE.L  #1,D2                                       
+00000000                            63          MOVE.L  #54,D0                                      
+00000000                            64          TRAP    #15                                         
+00000000                            65          ; aumentar el cursor y el vector                    
+00000000                            66          ADD.L   #1,D3                                       
+00000000                            67          ADD.L   #2,A1                                       
+00000000                            68      ENDW                                                    
+00000000                            69      ; close file                                            
+00000000                            70      MOVE.L  #50,D0                                          
+00000000                            71      TRAP    #15                                             
+00000000                            72      ENDM                                                    
+00000000                            73  
+00000000                            74  INIT_VECTOR     MACRO
+00000000                            75  * Macro to load 1024 # in a vector.                         
+00000000                            76  * Parameters:     \1: vector adress                        
+00000000                            77  * Modifies  : D0, D1, D2, A1                                
+00000000                            78  *-----------------------------------------------------------
+00000000                            79     CLR.L   D0                                               
+00000000                            80     WHILE.W D0 <LE> #1024 DO.S                               
+00000000                            81         LEA.L   \1,A1                                       
+00000000                            82         ADD.L   D0,A1                                        
+00000000                            83         MOVE.W  #$2300,(A1)                                  
+00000000                            84         ADD.W   #2,D0                                        
+00000000                            85     ENDW                                                     
+00000000                            86     ENDM                                                    
+00000000                            87  
+00000000                            88  DRETA   MACRO                                    
+00000000                            89  * Macro to increase in 1 word the cursor of the file.       
+00000000                            90  * Parameters: \1: vector cursor name                       
+00000000                            91  * Modifies  : D0, A1                                        
+00000000                            92  *-----------------------------------------------------------
+00000000                            93     CLR.L   D0                                               
+00000000                            94     LEA.L   \1,A1                                           
+00000000                            95     MOVE.L  (A1),D0                                          
+00000000                            96     ADD.L   #2,D0                                            
+00000000                            97     MOVE.L  D0,(A1)                                          
+00000000                            98     ENDM                                                     
+00000000                            99  
+00000000                           100  ESQUERRA    MACRO                                    
+00000000                           101  * Macro to increase in 1 unit the cursor of the file.       
+00000000                           102  * Parameters: \1: vector cursor name                       
+00000000                           103  * Modifies  : D0, A1                                        
+00000000                           104  *-----------------------------------------------------------
+00000000                           105     CLR.L   D0                                               
+00000000                           106     LEA.L   \1,A1                                           
+00000000                           107     MOVE.L  (A1),D0                                          
+00000000                           108     SUB.L   #2,D0                                            
+00000000                           109     MOVE.L  D0,(A1)                                          
+00000000                           110     ENDM                                                     
+00000000                           111  
+00000000                           112  READ_VECTOR     MACRO
+00000000                           113  * Macro to reads 1 word from the vector address             
+00000000                           114  * Parameters: \1: vector name                              
+00000000                           115  *             \2: simbol desp                              
+00000000                           116  *             \3: vector cursor                            
+00000000                           117  * Modifies  : D0, D1, D2, A1                                
+00000000                           118  * Always executed after trap 51, 52 or 55                   
+00000000                           119  *-----------------------------------------------------------
+00000000                           120     LEA.L    \3,A1                                          
+00000000                           121     MOVE.L   (A1),D0                                         
+00000000                           122     IF.B    D0 <LT> #0 THEN.S                                
+00000000                           123          MOVE.L #'#',D0                                      
+00000000                           124     ELSE                                                     
+00000000                           125          LEA.L    \1,A1                                     
+00000000                           126          ADD.L    D0,A1                                      
+00000000                           127          MOVE.W   (A1),D0                                    
+00000000                           128          ROR.W    #8,D0                                      
+00000000                           129     ENDI                                                     
+00000000                           130     MOVE.W   D0,\2(A7)                                      
+00000000                           131     ENDM                                                     
+00000000                           132  
+00000000                           133  READ_SIMBOL     MACRO
+00000000                           134  * Macro to read.                                            
+00000000                           135  * Parameters: \1: Param1   ;Desplazamiento del origen      
+00000000                           136  *             \2: Param2   ;Desplazamiento del destino     
+00000000                           137  * Modifies  : D0, A1                                        
+00000000                           138  *-----------------------------------------------------------
+00000000                           139     CLR.L   D0                                               
+00000000                           140     MOVE.L  \2, A1                                          
+00000000                           141     MOVE.W  (A1),D0                                          
+00000000                           142     MOVE.W  D0, \1(A7)                                      
+00000000                           143     ENDM                                                     
+00000000                           144  
+00000000                           145  ASIGN_VALUE_SIMBOL MACRO                                    
+00000000                           146  * Macro to assign value to simbol.                          
+00000000                           147  * Parameters: \1: Param1   ;DESP                           
+00000000                           148  *             \2: Param2   ;VALOR                          
+00000000                           149  * Modifies  : D0                                            
+00000000                           150  *-----------------------------------------------------------
+00000000                           151     CLR.L D0                                                 
+00000000                           152     MOVE.W \2, D0                                           
+00000000                           153     MOVE.W D0, \1(A7)                                       
+00000000                           154     ENDM                                                     
+00000000                           155  
+00000000                           156  ASIGN_VALUE_ACCEPTA MACRO                                   
+00000000                           157  * Macro to assign value to simbol.                          
+00000000                           158  * Parameters: \1: value                                    
+00000000                           159  *             \2: accepta address                          
+00000000                           160  * Modifies  : D0                                            
+00000000                           161  *-----------------------------------------------------------
+00000000                           162     CLR.L   D0                                               
+00000000                           163     LEA     \2,A1                                           
+00000000                           164     MOVE.W  \1,D0                                           
+00000000                           165     MOVE.W  D0,(A1)                                          
+00000000                           166     ENDM                                                     
+00000000                           167  
+00000000                           168  ASIGN_SIMBOL_SIMBOL MACRO                                   
+00000000                           169  * Macro to assign simbol to simbol.                         
+00000000                           170  * Parameters: \1: desp simbol param 1                      
+00000000                           171  *             \2: desp simbol dest                         
+00000000                           172  * Modifies  : D0                                            
+00000000                           173  *-----------------------------------------------------------
+00000000                           174     CLR.L   D0                                               
+00000000                           175     MOVE.W  \1(A7),D0                                       
+00000000                           176     MOVE.W  D0,\2(A7)                                       
+00000000                           177     ENDM                                                     
+00000000                           178  
+00000000                           179  ASIGN_SIMBOL_ACCEPTA MACRO                                  
+00000000                           180  * Macro to assign simbol to accepta.                        
+00000000                           181  * Parameters: \1: desp simbol param 1                      
+00000000                           182  *             \2: accepta address                          
+00000000                           183  * Modifies  : D0,A1                                         
+00000000                           184  *-----------------------------------------------------------
+00000000                           185     CLR.L   D0                                               
+00000000                           186     LEA     \2,A1                                           
+00000000                           187     MOVE.W  \1(A7),D0                                       
+00000000                           188     MOVE.W  D0,(A1)                                          
+00000000                           189     ENDM                                                     
+00000000                           190  
+00000000                           191  ASIGN_ACCEPTA_SIMBOL MACRO                                  
+00000000                           192  * Macro to assign accepta to simbol.                        
+00000000                           193  * Parameters: \1: desp simbol param 1                      
+00000000                           194  *             \2: accepta address                          
+00000000                           195  * Modifies  : D0,A1                                         
+00000000                           196  *-----------------------------------------------------------
+00000000                           197     CLR.L   D0                                               
+00000000                           198     LEA     \2,A1                                           
+00000000                           199     MOVE.W  (A1),\1(A7)                                     
+00000000                           200     ENDM                                                     
+00000000                           201  
+00000000                           202  ASIGN_VALUE_VECTOR MACRO                                    
+00000000                           203  * Macro to assign value to vector.                          
+00000000                           204  * Parameters: \1: value                                    
+00000000                           205  *             \2: vector address                           
+00000000                           206  *             \3: cursor address                           
+00000000                           207  * Modifies  : D0,A1                                         
+00000000                           208  *-----------------------------------------------------------
+00000000                           209     LEA     \3,A1                                           
+00000000                           210     MOVE.L  (A1),D0                                          
+00000000                           211     LEA     \2,A1                                           
+00000000                           212     ADD.L   D0,A1                                            
+00000000                           213     MOVE.W  \1,D0                                           
+00000000                           214     ROR.W   #8,D0                                            
+00000000                           215     MOVE.W  D0,(A1)                                          
+00000000                           216     ENDM                                                     
+00000000                           217  
+00000000                           218  ASIGN_SIMBOL_VECTOR MACRO                                   
+00000000                           219  * Macro to assign simbol to vector.                         
+00000000                           220  * Parameters: \1: simbol desp                              
+00000000                           221  *             \2: vector address                           
+00000000                           222  *             \3: vector cursor                            
+00000000                           223  * Modifies  : D0,A1                                         
+00000000                           224  *-----------------------------------------------------------
+00000000                           225     LEA     \3,A1                                           
+00000000                           226     MOVE.L  (A1),D0                                          
+00000000                           227     LEA     \2,A1                                           
+00000000                           228     ADD.L   D0,A1                                            
+00000000                           229     MOVE.W  \1(A7),D0                                       
+00000000                           230     ROR.W   #8,D0                                            
+00000000                           231     MOVE.W  D0,(A1)                                          
+00000000                           232     ENDM                                                     
+00000000                           233  
+00000000                           234  COMP_IGUAL_SIMBOL   MACRO
+00000000                           235  * Macro to compare.                          
+00000000                           236  * Parameters: \1: Param1
+00000000                           237  *             \2: Param2
+00000000                           238  *             \3: Param3 
+00000000                           239  
+00000000                           240  * Modifies  : D0
+00000000                           241  *             D1
+00000000                           242  *-----------------------------------------------------------
+00000000                           243          CLR.L D0
+00000000                           244          CLR.L D1
+00000000                           245  * COMPARAR D0 Y D1
+00000000                           246          MOVE.W \1(A7), D0
+00000000                           247          ; mirar que d0 es correcto
+00000000                           248          IF.B   D0 <EQ> #$FF THEN.S
+00000000                           249             AND.W   #$FF00,D0
+00000000                           250             ROR.L   #8,D0
+00000000                           251          ENDI
+00000000                           252          MOVE.W \2(A7), D1
+00000000                           253          ; mirar que d1 es correcto
+00000000                           254          IF.B   D1 <EQ> #$FF THEN.S
+00000000                           255             AND.W   #$FF00,D1
+00000000                           256             ROR.L   #8,D1
+00000000                           257          ENDI
+00000000                           258  * SI SON IGUALES GUARDAR UN 1 (BOOLEAN TRUE)
+00000000                           259          CMP.W D0, D1
+00000000                           260          BNE igual_int_falso\@
+00000000                           261          MOVE.W  #1,D0
+00000000                           262          BRA igual_asig_int_true\@
+00000000                           263  
+00000000                           264  * SI SON DIFERENTES GUARDAR UN 0 (BOOLEAN FALSE)
+00000000                           265  igual_int_falso\@
+00000000                           266          MOVE.W  #0,D0
+00000000                           267  igual_asig_int_true\@        
+00000000                           268          MOVE.W D0, \3(A7)
+00000000                           269          ENDM
+00000000                           270  
+00000000                           271  COMP_DIF_SIMBOL     MACRO
+00000000                           272  * Macro to compare.                          
+00000000                           273  * Parameters: \1: Param1
+00000000                           274  *             \2: Param2
+00000000                           275  *             \3: Param3 
+00000000                           276  
+00000000                           277  * Modifies  : D0
+00000000                           278  *             D1
+00000000                           279  *-----------------------------------------------------------
+00000000                           280          CLR.L D0
+00000000                           281          CLR.L D1
+00000000                           282  * COMPARAR D0 Y D1
+00000000                           283          MOVE.W \1(A7), D0
+00000000                           284          ; mirar que d0 es correcto
+00000000                           285          IF.B   D0 <EQ> #$FF THEN.S
+00000000                           286             AND.W   #$FF00,D0
+00000000                           287             ROR.L   #8,D0
+00000000                           288          ENDI
+00000000                           289          MOVE.W \2(A7), D1
+00000000                           290          ; mirar que d0 es correcto
+00000000                           291          IF.B   D1 <EQ> #$FF THEN.S
+00000000                           292             AND.W   #$FF00,D1
+00000000                           293             ROR.L   #8,D1
+00000000                           294          ENDI
+00000000                           295  * SI SON iguales GUARDAR UN 0 (BOOLEAN FALSE)
+00000000                           296          CMP.W D0, D1
+00000000                           297          BNE dif_int_falso\@
+00000000                           298          MOVE.W  #0,D0
+00000000                           299          BRA dif_asig_int_true\@
+00000000                           300  
+00000000                           301  * SI SON DIFERENTES GUARDAR UN 1 (BOOLEAN TRUE)
+00000000                           302  dif_int_falso\@
+00000000                           303          MOVE.W  #1,D0
+00000000                           304          
+00000000                           305  dif_asig_int_true\@        
+00000000                           306          MOVE.W D0, \3(A7)
+00000000                           307          ENDM
+00000000                           308  
+00000000                           309  ; -----------------------------------------------------------------------------
+00000000                           310  EMPILA      MACRO
+00000000                           311  ; Insertar un simbolo en la pila.
+00000000                           312  * Parameters: \1: desplazamiento del simbolo
+00000000                           313  
+00000000                           314  * Modifies  : D0,A0
+00000000                           315  ; -----------------------------------------------------------------------------
+00000000                           316              MOVE.W   \1(A7),D0
+00000000                           317              MOVE.W   D0,-(A0)
+00000000                           318              ENDM
+00000000                           319  
+00000000                           320  ; -----------------------------------------------------------------------------
+00000000                           321  CIM      MACRO
+00000000                           322  ; Coger el símbolo de la cima de la pila.
+00000000                           323  * Parameters: \1: desplazamiento del simbolo
+00000000                           324  
+00000000                           325  * Modifies  : D0
+00000000                           326  ; -----------------------------------------------------------------------------
+00000000                           327              MOVE.W   (A0),\1(A7)
+00000000                           328              ENDM
+00000000                           329  
+00000000                           330  ; -----------------------------------------------------------------------------
+00000000                           331  DESEMPILA      MACRO
+00000000                           332  ; Eliminar un simbolo de la pila.
+00000000                           333  
+00000000                           334  * Modifies  : A0
+00000000                           335  ; -----------------------------------------------------------------------------
+00000000                           336              ADD.L    #2,A0
+00000000                           337              ENDM
+00000000                           338  
+00000000                           339  ; -----------------------------------------------------------------------------
+00000000                           340  LOAD_STACK      MACRO
+00000000                           341  ; Prepara la pila en A0.
+00000000                           342  * Parameters: \1: direccion de la pila
+00000000                           343  
+00000000                           344  * Modifies  : A0
+00000000                           345  ; -----------------------------------------------------------------------------
+00000000                           346              LEA.L  \1, A0
+00000000                           347              ADD.L   #2, A0
+00000000                           348              ENDM
+00000000                           349  
+00000000                           350  BUIDA   MACRO
+00000000                           351  * Macro para saber si la pila esta vacia.                  
+00000000                           352  * Parameters: \1: Dirección de la pila (cuando esta a 0)
+00000000                           353  *             \2: Simbolo donde se guarda el resultado
+00000000                           354  
+00000000                           355  * Modifies  : D0,A1
+00000000                           356  *-----------------------------------------------------------
+00000000                           357          LEA.L        \1,A1
+00000000                           358          ADD.L        #2,A1
+00000000                           359  * COMPARAR A0 Y A1
+00000000                           360  * SI SON IGUALES GUARDAR UN 1 (BOOLEAN TRUE)
+00000000                           361          CMP.L A0,A1
+00000000                           362          BNE igual_int_falso\@
+00000000                           363          MOVE.W  #1,D0
+00000000                           364          BRA igual_asig_int_true\@
+00000000                           365  
+00000000                           366  * SI SON DIFERENTES GUARDAR UN 0 (BOOLEAN FALSE)
+00000000                           367  igual_int_falso\@
+00000000                           368          MOVE.W  #0,D0
+00000000                           369  igual_asig_int_true\@        
+00000000                           370          MOVE.W D0, \2(A7)
+00000000                           371          ENDM
+00000000                           372  
+00000000                           373  NOBUIDA     MACRO
+00000000                           374  * Macro para saber si la pila esta vacia.                  
+00000000                           375  * Parameters: \1: Dirección de la pila (cuando esta a 0)
+00000000                           376  *             \2: Simbolo donde se guarda el resultado
+00000000                           377  
+00000000                           378  * Modifies  : D0,A1
+00000000                           379  *-----------------------------------------------------------
+00000000                           380          LEA.L        \1,A1
+00000000                           381          ADD.L        #2,A1
+00000000                           382  * COMPARAR A0 Y A1
+00000000                           383  * SI SON DIFERENTES GUARDAR UN 1 (BOOLEAN TRUE)
+00000000                           384          CMP.L A0,A1
+00000000                           385          BEQ igual_int_falso\@
+00000000                           386          MOVE.W  #1,D0
+00000000                           387          BRA igual_asig_int_true\@
+00000000                           388  
+00000000                           389  * SI SON DIFERENTES GUARDAR UN 0 (BOOLEAN FALSE)
+00000000                           390  igual_int_falso\@
+00000000                           391          MOVE.W  #0,D0
+00000000                           392  igual_asig_int_true\@        
+00000000                           393          MOVE.W D0, \2(A7)
+00000000                           394          ENDM
+00000000                           395  
+00000000                           396  -------------------- end include --------------------
+00000000                           397                                                                
+00000000                           398                                                                
+00000000                           399                                                                
+00000000                           400  *************************************************************
+00000000                           401  *                         MAIN PROGRAM                      *
+00000000                           402  *************************************************************
+00000000                           403  
+00001000                           404      ORG    $1000
+00001000                           405  START:                  ; first instruction of program
+00001000                           406  
+00001000                           407  ; cerrar todos los ficheros (aconsejado)                     
+00001000                           408  ; close file                                            
+00001000  7032                     409      MOVE.L  #50,D0                                          
+00001002  4E4F                     410      TRAP    #15                                              
+00001004                           411  ;   cargar el vector de entrada 
+00001004                           412m     LOAD_ENT    ENT, entiguals
+00001004                           413m * MACRO TO READS 1 WORD FROM THE VECTOR ADDRESS             
+00001004                           414m * PARAMETERS:     \1: ENT FILE ADRESS                      
+00001004                           415m *                 \2: ENT VECTOR ADRESS* MODIFIES  : D0, D1, D2, D3, A1                            
+00001004                           416m * ALWAYS EXECUTED AFTER TRAP 51, 52 OR 55                   
+00001004                           417m *-----------------------------------------------------------
+00001004                           418m     ; OPEN EXISTING FILE                                    
+0000100E                           419m     ; READ FILE                                             
+00001020                           420m         ; SET CURSOR                                        
+00001034                           421m     ; CLOSE FILE                                            
+00001038                           422m     INIT_VECTOR copiaiguals
+00001038                           423m * MACRO TO LOAD 1024 # IN A VECTOR.                         
+00001038                           424m * PARAMETERS:     \1: VECTOR ADRESS                        
+00001038                           425m * MODIFIES  : D0, D1, D2, A1                                
+00001038                           426m *-----------------------------------------------------------
+00001050                           427  ;   instruccion start del programa 
+00001050                           428  ;   c3d:        call_ - - 0 
+00001050  4EB9 000010A4            429      JSR         P_IGUALS
+00001056                           430  
+00001056                           431  ;   imprimir valor de accepta 
+00001056  43F9 00001570            432      LEA         acceptastr,A1 
+0000105C  303C 000E                433      MOVE.W      #14,D0        
+00001060  4E4F                     434      TRAP        #15           
+00001062  4281                     435      CLR.L       D1            
+00001064  43F9 0000156C            436      LEA         accepta,A1    
+0000106A  3211                     437      MOVE.W      (A1),D1       
+0000106C  303C 0006                438      MOVE.W      #6,D0         
+00001070  4E4F                     439      TRAP        #15           
+00001072                           440m     SAVE_ENT    ENT, entiguals
+00001072                           441m * MACRO TO READS 1 WORD FROM THE VECTOR ADDRESS             
+00001072                           442m * PARAMETERS:     \1: ENT FILE ADRESS                      
+00001072                           443m *                 \2: ENT VECTOR ADRESS* MODIFIES  : D0, D1, D2, A1                                
+00001072                           444m * ALWAYS EXECUTED AFTER TRAP 51, 52 OR 55                   
+00001072                           445m *-----------------------------------------------------------
+00001074                           446m     ; OPEN EXISTING FILE                                    
+0000108C                           447m         ; SET CURSOR                                        
+00001090                           448m         ; WRITE FILE                                        
+00001096                           449m         ; AUMENTAR EL CURSOR Y EL VECTOR                    
+0000109C                           450m     ; CLOSE FILE                                            
+000010A0  FFFF FFFF                451      SIMHALT             ; halt simulator
+000010A4                           452  ******************** PROCEDURE ******************** 
+000010A4                           453  ; c3d:  procedure_ - - 0 
+000010A4                           454  
+000010A4                           455  P_IGUALS:
+000010A4                           456  ******************** PREAMBLE ******************** 
+000010A4                           457  ;   preambulo 
+000010A4                           458  ;   c3d:    preamble_ - - 0 
+000010A4                           459  
+000010A4  9FFC 00000000            460      SUB.L   #0, A7
+000010AA  598F                     461      SUB.L   #4, A7  ;BP
+000010AC  2EBC 00000000            462      MOVE.L  #0, (A7) ;Todo 0
+000010B2  2C4F                     463      MOVE.L  A7, A6 ;SP==A7
+000010B4  9DFC 0000001E            464      SUB.L   #30, A6  
+000010BA                           465  ;   llamada a un subprograma 
+000010BA                           466  ;   c3d:    call_ - - 1 
+000010BA  2A4F                     467      MOVE.L  A7, A5      ;Preparamos la pila para añadir nuevo prmbl
+000010BC  2E4E                     468      MOVE.L  A6, A7      
+000010BE  2F0D                     469      MOVE.L  A5, -(A7)  ;BP anterior
+000010C0  598F                     470      SUB.L #4, A7  ;Espacio para PC
+000010C2  588F                     471      ADD.L #4, A7  ;Regresamos para poner el pc en el salto
+000010C4  4EB9 000013A8            472      JSR P_COPIAR
+000010CA                           473      ;volvemos de subrutina
+000010CA  DFFC 00000000            474      ADD.L #0, A7 ;Botamos return
+000010D0  2A5F                     475      MOVE.L (A7)+, A5 ;Cogemos BP
+000010D2  2C4F                     476      MOVE.L A7, A6  ;Dejamos A6 en la cima
+000010D4  2E4D                     477      MOVE.L A5, A7 ;Nos colocamos en el BP del metodo actual
+000010D6                           478  ******************** ASIGNAR SIMBOLO ******************** 
+000010D6                           479  ; c3d: assig_ 49 - 0 
+000010D6                           480m     ASIGN_VALUE_SIMBOL -2, #49
+000010D6                           481m * MACRO TO ASSIGN VALUE TO SIMBOL.                          
+000010D6                           482m * PARAMETERS: \1: PARAM1   ;DESP                           
+000010D6                           483m *             \2: PARAM2   ;VALOR                          
+000010D6                           484m * MODIFIES  : D0                                            
+000010D6                           485m *-----------------------------------------------------------
+000010E0                           486  ******************** ASIGNAR SIMBOLO ******************** 
+000010E0                           487  ; c3d: assig_ 0 - accepta 
+000010E0                           488m     ASIGN_SIMBOL_ACCEPTA -2, accepta 
+000010E0                           489m * MACRO TO ASSIGN SIMBOL TO ACCEPTA.                        
+000010E0                           490m * PARAMETERS: \1: DESP SIMBOL PARAM 1                      
+000010E0                           491m *             \2: ACCEPTA ADDRESS                          
+000010E0                           492m * MODIFIES  : D0,A1                                         
+000010E0                           493m *-----------------------------------------------------------
+000010EE                           494  ;   escribir etiqueta 
+000010EE                           495  ;   c3d: skip_ - - t_while_0_0 
+000010EE                           496  t_while_0_0:
+000010EE                           497   ****************** READ VECTOR ***************** 
+000010EE                           498m     READ_VECTOR     entiguals, -4, entigualscursor
+000010EE                           499m * MACRO TO READS 1 WORD FROM THE VECTOR ADDRESS             
+000010EE                           500m * PARAMETERS: \1: VECTOR NAME                              
+000010EE                           501m *             \2: SIMBOL DESP                              
+000010EE                           502m *             \3: VECTOR CURSOR                            
+000010EE                           503m * MODIFIES  : D0, D1, D2, A1                                
+000010EE                           504m * ALWAYS EXECUTED AFTER TRAP 51, 52 OR 55                   
+000010EE                           505m *-----------------------------------------------------------
+00001112                           506  ******************** ASIGNAR SIMBOLO ******************** 
+00001112                           507  ; c3d: assig_ 35 - 2 
+00001112                           508m     ASIGN_VALUE_SIMBOL -6, #35
+00001112                           509m * MACRO TO ASSIGN VALUE TO SIMBOL.                          
+00001112                           510m * PARAMETERS: \1: PARAM1   ;DESP                           
+00001112                           511m *             \2: PARAM2   ;VALOR                          
+00001112                           512m * MODIFIES  : D0                                            
+00001112                           513m *-----------------------------------------------------------
+0000111C                           514  ;   comparar si son diferentes 
+0000111C                           515  ;   c3d: diferent_ 1 2 3 
+0000111C                           516m     COMP_DIF_SIMBOL -4, -6, -8   
+0000111C                           517m * MACRO TO COMPARE.                          
+0000111C                           518m * PARAMETERS: \1: PARAM1
+0000111C                           519m *             \2: PARAM2
+0000111C                           520m *             \3: PARAM3 
+0000111C                           521m * MODIFIES  : D0
+0000111C                           522m *             D1
+0000111C                           523m *-----------------------------------------------------------
+00001120                           524m * COMPARAR D0 Y D1
+00001124                           525m         ; MIRAR QUE D0 ES CORRECTO
+00001134                           526m         ; MIRAR QUE D0 ES CORRECTO
+00001140                           527m * SI SON IGUALES GUARDAR UN 0 (BOOLEAN FALSE)
+0000114E                           528m * SI SON DIFERENTES GUARDAR UN 1 (BOOLEAN TRUE)
+00001156                           529  ;   condicional if 
+00001156                           530  ;   c3d: if_ 3 - t_while_0_1 
+00001156  302F FFF8                531      MOVE.W  -8(A7),D0 
+0000115A  B07C 0001                532      CMP.W   #1, D0   
+0000115E  6700 0006                533      BEQ t_while_0_1   
+00001162                           534  ;   saltar a la etiqueta 
+00001162                           535  ;   c3d: goto_ - - t_while_0_2 
+00001162  6000 00D4                536      BRA t_while_0_2   
+00001166                           537  ;   escribir etiqueta 
+00001166                           538  ;   c3d: skip_ - - t_while_0_1 
+00001166                           539  t_while_0_1:
+00001166                           540   ****************** READ VECTOR ***************** 
+00001166                           541m     READ_VECTOR     entiguals, -10, entigualscursor
+00001166                           542m * MACRO TO READS 1 WORD FROM THE VECTOR ADDRESS             
+00001166                           543m * PARAMETERS: \1: VECTOR NAME                              
+00001166                           544m *             \2: SIMBOL DESP                              
+00001166                           545m *             \3: VECTOR CURSOR                            
+00001166                           546m * MODIFIES  : D0, D1, D2, A1                                
+00001166                           547m * ALWAYS EXECUTED AFTER TRAP 51, 52 OR 55                   
+00001166                           548m *-----------------------------------------------------------
+0000118A                           549   ****************** READ VECTOR ***************** 
+0000118A                           550m     READ_VECTOR     copiaiguals, -12, copiaigualscursor
+0000118A                           551m * MACRO TO READS 1 WORD FROM THE VECTOR ADDRESS             
+0000118A                           552m * PARAMETERS: \1: VECTOR NAME                              
+0000118A                           553m *             \2: SIMBOL DESP                              
+0000118A                           554m *             \3: VECTOR CURSOR                            
+0000118A                           555m * MODIFIES  : D0, D1, D2, A1                                
+0000118A                           556m * ALWAYS EXECUTED AFTER TRAP 51, 52 OR 55                   
+0000118A                           557m *-----------------------------------------------------------
+000011AE                           558  ;   comparar si son diferentes 
+000011AE                           559  ;   c3d: diferent_ 4 5 6 
+000011AE                           560m     COMP_DIF_SIMBOL -10, -12, -14   
+000011AE                           561m * MACRO TO COMPARE.                          
+000011AE                           562m * PARAMETERS: \1: PARAM1
+000011AE                           563m *             \2: PARAM2
+000011AE                           564m *             \3: PARAM3 
+000011AE                           565m * MODIFIES  : D0
+000011AE                           566m *             D1
+000011AE                           567m *-----------------------------------------------------------
+000011B2                           568m * COMPARAR D0 Y D1
+000011B6                           569m         ; MIRAR QUE D0 ES CORRECTO
+000011C6                           570m         ; MIRAR QUE D0 ES CORRECTO
+000011D2                           571m * SI SON IGUALES GUARDAR UN 0 (BOOLEAN FALSE)
+000011E0                           572m * SI SON DIFERENTES GUARDAR UN 1 (BOOLEAN TRUE)
+000011E8                           573  ;   condicional if 
+000011E8                           574  ;   c3d: if_ 6 - t_if_0_0 
+000011E8  302F FFF2                575      MOVE.W  -14(A7),D0 
+000011EC  B07C 0001                576      CMP.W   #1, D0   
+000011F0  6700 0006                577      BEQ t_if_0_0   
+000011F4                           578  ;   saltar a la etiqueta 
+000011F4                           579  ;   c3d: goto_ - - t_if_0_1 
+000011F4  6000 001E                580      BRA t_if_0_1   
+000011F8                           581  ;   escribir etiqueta 
+000011F8                           582  ;   c3d: skip_ - - t_if_0_0 
+000011F8                           583  t_if_0_0:
+000011F8                           584  ******************** ASIGNAR SIMBOLO ******************** 
+000011F8                           585  ; c3d: assig_ 48 - 7 
+000011F8                           586m     ASIGN_VALUE_SIMBOL -16, #48
+000011F8                           587m * MACRO TO ASSIGN VALUE TO SIMBOL.                          
+000011F8                           588m * PARAMETERS: \1: PARAM1   ;DESP                           
+000011F8                           589m *             \2: PARAM2   ;VALOR                          
+000011F8                           590m * MODIFIES  : D0                                            
+000011F8                           591m *-----------------------------------------------------------
+00001202                           592  ******************** ASIGNAR SIMBOLO ******************** 
+00001202                           593  ; c3d: assig_ 7 - accepta 
+00001202                           594m     ASIGN_SIMBOL_ACCEPTA -16, accepta 
+00001202                           595m * MACRO TO ASSIGN SIMBOL TO ACCEPTA.                        
+00001202                           596m * PARAMETERS: \1: DESP SIMBOL PARAM 1                      
+00001202                           597m *             \2: ACCEPTA ADDRESS                          
+00001202                           598m * MODIFIES  : D0,A1                                         
+00001202                           599m *-----------------------------------------------------------
+00001210                           600  ;   saltar a la etiqueta 
+00001210                           601  ;   c3d: goto_ - - t_if_0_2 
+00001210  6000 0022                602      BRA t_if_0_2   
+00001214                           603  ;   escribir etiqueta 
+00001214                           604  ;   c3d: skip_ - - t_if_0_1 
+00001214                           605  t_if_0_1:
+00001214                           606m     DRETA entigualscursor
+00001214                           607m * MACRO TO INCREASE IN 1 WORD THE CURSOR OF THE FILE.       
+00001214                           608m * PARAMETERS: \1: VECTOR CURSOR NAME                       
+00001214                           609m * MODIFIES  : D0, A1                                        
+00001214                           610m *-----------------------------------------------------------
+00001222                           611m     DRETA copiaigualscursor
+00001222                           612m * MACRO TO INCREASE IN 1 WORD THE CURSOR OF THE FILE.       
+00001222                           613m * PARAMETERS: \1: VECTOR CURSOR NAME                       
+00001222                           614m * MODIFIES  : D0, A1                                        
+00001222                           615m *-----------------------------------------------------------
+00001230                           616  ;   saltar a la etiqueta 
+00001230                           617  ;   c3d: goto_ - - t_if_0_2 
+00001230  6000 0002                618      BRA t_if_0_2   
+00001234                           619  ;   escribir etiqueta 
+00001234                           620  ;   c3d: skip_ - - t_if_0_2 
+00001234                           621  t_if_0_2:
+00001234                           622  ;   saltar a la etiqueta 
+00001234                           623  ;   c3d: goto_ - - t_while_0_0 
+00001234  6000 FEB8                624      BRA t_while_0_0   
+00001238                           625  ;   escribir etiqueta 
+00001238                           626  ;   c3d: skip_ - - t_while_0_2 
+00001238                           627  t_while_0_2:
+00001238                           628   ****************** READ VECTOR ***************** 
+00001238                           629m     READ_VECTOR     entiguals, -18, entigualscursor
+00001238                           630m * MACRO TO READS 1 WORD FROM THE VECTOR ADDRESS             
+00001238                           631m * PARAMETERS: \1: VECTOR NAME                              
+00001238                           632m *             \2: SIMBOL DESP                              
+00001238                           633m *             \3: VECTOR CURSOR                            
+00001238                           634m * MODIFIES  : D0, D1, D2, A1                                
+00001238                           635m * ALWAYS EXECUTED AFTER TRAP 51, 52 OR 55                   
+00001238                           636m *-----------------------------------------------------------
+0000125C                           637   ****************** READ VECTOR ***************** 
+0000125C                           638m     READ_VECTOR     copiaiguals, -20, copiaigualscursor
+0000125C                           639m * MACRO TO READS 1 WORD FROM THE VECTOR ADDRESS             
+0000125C                           640m * PARAMETERS: \1: VECTOR NAME                              
+0000125C                           641m *             \2: SIMBOL DESP                              
+0000125C                           642m *             \3: VECTOR CURSOR                            
+0000125C                           643m * MODIFIES  : D0, D1, D2, A1                                
+0000125C                           644m * ALWAYS EXECUTED AFTER TRAP 51, 52 OR 55                   
+0000125C                           645m *-----------------------------------------------------------
+00001280                           646  ;   comparar si son diferentes 
+00001280                           647  ;   c3d: diferent_ 8 9 10 
+00001280                           648m     COMP_DIF_SIMBOL -18, -20, -22   
+00001280                           649m * MACRO TO COMPARE.                          
+00001280                           650m * PARAMETERS: \1: PARAM1
+00001280                           651m *             \2: PARAM2
+00001280                           652m *             \3: PARAM3 
+00001280                           653m * MODIFIES  : D0
+00001280                           654m *             D1
+00001280                           655m *-----------------------------------------------------------
+00001284                           656m * COMPARAR D0 Y D1
+00001288                           657m         ; MIRAR QUE D0 ES CORRECTO
+00001298                           658m         ; MIRAR QUE D0 ES CORRECTO
+000012A4                           659m * SI SON IGUALES GUARDAR UN 0 (BOOLEAN FALSE)
+000012B2                           660m * SI SON DIFERENTES GUARDAR UN 1 (BOOLEAN TRUE)
+000012BA                           661  ;   condicional if 
+000012BA                           662  ;   c3d: if_ 10 - t_if_0_3 
+000012BA  302F FFEA                663      MOVE.W  -22(A7),D0 
+000012BE  B07C 0001                664      CMP.W   #1, D0   
+000012C2  6700 0006                665      BEQ t_if_0_3   
+000012C6                           666  ;   saltar a la etiqueta 
+000012C6                           667  ;   c3d: goto_ - - t_if_0_4 
+000012C6  6000 001E                668      BRA t_if_0_4   
+000012CA                           669  ;   escribir etiqueta 
+000012CA                           670  ;   c3d: skip_ - - t_if_0_3 
+000012CA                           671  t_if_0_3:
+000012CA                           672  ******************** ASIGNAR SIMBOLO ******************** 
+000012CA                           673  ; c3d: assig_ 48 - 11 
+000012CA                           674m     ASIGN_VALUE_SIMBOL -24, #48
+000012CA                           675m * MACRO TO ASSIGN VALUE TO SIMBOL.                          
+000012CA                           676m * PARAMETERS: \1: PARAM1   ;DESP                           
+000012CA                           677m *             \2: PARAM2   ;VALOR                          
+000012CA                           678m * MODIFIES  : D0                                            
+000012CA                           679m *-----------------------------------------------------------
+000012D4                           680  ******************** ASIGNAR SIMBOLO ******************** 
+000012D4                           681  ; c3d: assig_ 11 - accepta 
+000012D4                           682m     ASIGN_SIMBOL_ACCEPTA -24, accepta 
+000012D4                           683m * MACRO TO ASSIGN SIMBOL TO ACCEPTA.                        
+000012D4                           684m * PARAMETERS: \1: DESP SIMBOL PARAM 1                      
+000012D4                           685m *             \2: ACCEPTA ADDRESS                          
+000012D4                           686m * MODIFIES  : D0,A1                                         
+000012D4                           687m *-----------------------------------------------------------
+000012E2                           688  ;   saltar a la etiqueta 
+000012E2                           689  ;   c3d: goto_ - - t_if_0_5 
+000012E2  6000 00BA                690      BRA t_if_0_5   
+000012E6                           691  ;   escribir etiqueta 
+000012E6                           692  ;   c3d: skip_ - - t_if_0_4 
+000012E6                           693  t_if_0_4:
+000012E6                           694m     ESQUERRA entigualscursor
+000012E6                           695m * MACRO TO INCREASE IN 1 UNIT THE CURSOR OF THE FILE.       
+000012E6                           696m * PARAMETERS: \1: VECTOR CURSOR NAME                       
+000012E6                           697m * MODIFIES  : D0, A1                                        
+000012E6                           698m *-----------------------------------------------------------
+000012F4                           699m     ESQUERRA copiaigualscursor
+000012F4                           700m * MACRO TO INCREASE IN 1 UNIT THE CURSOR OF THE FILE.       
+000012F4                           701m * PARAMETERS: \1: VECTOR CURSOR NAME                       
+000012F4                           702m * MODIFIES  : D0, A1                                        
+000012F4                           703m *-----------------------------------------------------------
+00001302                           704  ;   escribir etiqueta 
+00001302                           705  ;   c3d: skip_ - - t_while_0_3 
+00001302                           706  t_while_0_3:
+00001302                           707   ****************** READ VECTOR ***************** 
+00001302                           708m     READ_VECTOR     entiguals, -26, entigualscursor
+00001302                           709m * MACRO TO READS 1 WORD FROM THE VECTOR ADDRESS             
+00001302                           710m * PARAMETERS: \1: VECTOR NAME                              
+00001302                           711m *             \2: SIMBOL DESP                              
+00001302                           712m *             \3: VECTOR CURSOR                            
+00001302                           713m * MODIFIES  : D0, D1, D2, A1                                
+00001302                           714m * ALWAYS EXECUTED AFTER TRAP 51, 52 OR 55                   
+00001302                           715m *-----------------------------------------------------------
+00001326                           716  ******************** ASIGNAR SIMBOLO ******************** 
+00001326                           717  ; c3d: assig_ 35 - 13 
+00001326                           718m     ASIGN_VALUE_SIMBOL -28, #35
+00001326                           719m * MACRO TO ASSIGN VALUE TO SIMBOL.                          
+00001326                           720m * PARAMETERS: \1: PARAM1   ;DESP                           
+00001326                           721m *             \2: PARAM2   ;VALOR                          
+00001326                           722m * MODIFIES  : D0                                            
+00001326                           723m *-----------------------------------------------------------
+00001330                           724  ;   comparar si son diferentes 
+00001330                           725  ;   c3d: diferent_ 12 13 14 
+00001330                           726m     COMP_DIF_SIMBOL -26, -28, -30   
+00001330                           727m * MACRO TO COMPARE.                          
+00001330                           728m * PARAMETERS: \1: PARAM1
+00001330                           729m *             \2: PARAM2
+00001330                           730m *             \3: PARAM3 
+00001330                           731m * MODIFIES  : D0
+00001330                           732m *             D1
+00001330                           733m *-----------------------------------------------------------
+00001334                           734m * COMPARAR D0 Y D1
+00001338                           735m         ; MIRAR QUE D0 ES CORRECTO
+00001348                           736m         ; MIRAR QUE D0 ES CORRECTO
+00001354                           737m * SI SON IGUALES GUARDAR UN 0 (BOOLEAN FALSE)
+00001362                           738m * SI SON DIFERENTES GUARDAR UN 1 (BOOLEAN TRUE)
+0000136A                           739  ;   condicional if 
+0000136A                           740  ;   c3d: if_ 14 - t_while_0_4 
+0000136A  302F FFE2                741      MOVE.W  -30(A7),D0 
+0000136E  B07C 0001                742      CMP.W   #1, D0   
+00001372  6700 0006                743      BEQ t_while_0_4   
+00001376                           744  ;   saltar a la etiqueta 
+00001376                           745  ;   c3d: goto_ - - t_while_0_5 
+00001376  6000 0022                746      BRA t_while_0_5   
+0000137A                           747  ;   escribir etiqueta 
+0000137A                           748  ;   c3d: skip_ - - t_while_0_4 
+0000137A                           749  t_while_0_4:
+0000137A                           750m     ESQUERRA entigualscursor
+0000137A                           751m * MACRO TO INCREASE IN 1 UNIT THE CURSOR OF THE FILE.       
+0000137A                           752m * PARAMETERS: \1: VECTOR CURSOR NAME                       
+0000137A                           753m * MODIFIES  : D0, A1                                        
+0000137A                           754m *-----------------------------------------------------------
+00001388                           755m     ESQUERRA copiaigualscursor
+00001388                           756m * MACRO TO INCREASE IN 1 UNIT THE CURSOR OF THE FILE.       
+00001388                           757m * PARAMETERS: \1: VECTOR CURSOR NAME                       
+00001388                           758m * MODIFIES  : D0, A1                                        
+00001388                           759m *-----------------------------------------------------------
+00001396                           760  ;   saltar a la etiqueta 
+00001396                           761  ;   c3d: goto_ - - t_while_0_3 
+00001396  6000 FF6A                762      BRA t_while_0_3   
+0000139A                           763  ;   escribir etiqueta 
+0000139A                           764  ;   c3d: skip_ - - t_while_0_5 
+0000139A                           765  t_while_0_5:
+0000139A                           766  ;   saltar a la etiqueta 
+0000139A                           767  ;   c3d: goto_ - - t_if_0_5 
+0000139A  6000 0002                768      BRA t_if_0_5   
+0000139E                           769  ;   escribir etiqueta 
+0000139E                           770  ;   c3d: skip_ - - t_if_0_5 
+0000139E                           771  t_if_0_5:
+0000139E                           772  ******************** END PROCEDURE ******************** 
+0000139E                           773  ;   para salir del subprograma 
+0000139E                           774  ;   c3d:    endProcedure_ - - 0 
+0000139E  2E4E                     775      MOVE.L  A6,A7       ; EN PRUEBAS 
+000013A0  DFFC 00000022            776      ADD.L   #34, A7  ;nos situamos en PC para volver
+000013A6  4E75                     777      RTS
+000013A8                           778  ******************** PROCEDURE ******************** 
+000013A8                           779  ; c3d:  procedure_ - - 1 
+000013A8                           780  
+000013A8                           781  P_COPIAR:
+000013A8                           782  ******************** PREAMBLE ******************** 
+000013A8                           783  ;   preambulo 
+000013A8                           784  ;   c3d:    preamble_ - - 1 
+000013A8                           785  
+000013A8  9FFC 00000000            786      SUB.L   #0, A7
+000013AE  598F                     787      SUB.L   #4, A7  ;BP
+000013B0  2EBC 00000000            788      MOVE.L  #0, (A7) ;Todo 0
+000013B6  2C4F                     789      MOVE.L  A7, A6 ;SP==A7
+000013B8  9DFC 0000000E            790      SUB.L   #14, A6  
+000013BE                           791  ;   escribir etiqueta 
+000013BE                           792  ;   c3d: skip_ - - t_while_0_6 
+000013BE                           793  t_while_0_6:
+000013BE                           794   ****************** READ VECTOR ***************** 
+000013BE                           795m     READ_VECTOR     entiguals, -2, entigualscursor
+000013BE                           796m * MACRO TO READS 1 WORD FROM THE VECTOR ADDRESS             
+000013BE                           797m * PARAMETERS: \1: VECTOR NAME                              
+000013BE                           798m *             \2: SIMBOL DESP                              
+000013BE                           799m *             \3: VECTOR CURSOR                            
+000013BE                           800m * MODIFIES  : D0, D1, D2, A1                                
+000013BE                           801m * ALWAYS EXECUTED AFTER TRAP 51, 52 OR 55                   
+000013BE                           802m *-----------------------------------------------------------
+000013E2                           803  ******************** ASIGNAR SIMBOLO ******************** 
+000013E2                           804  ; c3d: assig_ 35 - 16 
+000013E2                           805m     ASIGN_VALUE_SIMBOL -4, #35
+000013E2                           806m * MACRO TO ASSIGN VALUE TO SIMBOL.                          
+000013E2                           807m * PARAMETERS: \1: PARAM1   ;DESP                           
+000013E2                           808m *             \2: PARAM2   ;VALOR                          
+000013E2                           809m * MODIFIES  : D0                                            
+000013E2                           810m *-----------------------------------------------------------
+000013EC                           811  ;   comparar si son diferentes 
+000013EC                           812  ;   c3d: diferent_ 15 16 17 
+000013EC                           813m     COMP_DIF_SIMBOL -2, -4, -6   
+000013EC                           814m * MACRO TO COMPARE.                          
+000013EC                           815m * PARAMETERS: \1: PARAM1
+000013EC                           816m *             \2: PARAM2
+000013EC                           817m *             \3: PARAM3 
+000013EC                           818m * MODIFIES  : D0
+000013EC                           819m *             D1
+000013EC                           820m *-----------------------------------------------------------
+000013F0                           821m * COMPARAR D0 Y D1
+000013F4                           822m         ; MIRAR QUE D0 ES CORRECTO
+00001404                           823m         ; MIRAR QUE D0 ES CORRECTO
+00001410                           824m * SI SON IGUALES GUARDAR UN 0 (BOOLEAN FALSE)
+0000141E                           825m * SI SON DIFERENTES GUARDAR UN 1 (BOOLEAN TRUE)
+00001426                           826  ;   condicional if 
+00001426                           827  ;   c3d: if_ 17 - t_while_0_7 
+00001426  302F FFFA                828      MOVE.W  -6(A7),D0 
+0000142A  B07C 0001                829      CMP.W   #1, D0   
+0000142E  6700 0006                830      BEQ t_while_0_7   
+00001432                           831  ;   saltar a la etiqueta 
+00001432                           832  ;   c3d: goto_ - - t_while_0_8 
+00001432  6000 005E                833      BRA t_while_0_8   
+00001436                           834  ;   escribir etiqueta 
+00001436                           835  ;   c3d: skip_ - - t_while_0_7 
+00001436                           836  t_while_0_7:
+00001436                           837   ****************** READ VECTOR ***************** 
+00001436                           838m     READ_VECTOR     entiguals, -8, entigualscursor
+00001436                           839m * MACRO TO READS 1 WORD FROM THE VECTOR ADDRESS             
+00001436                           840m * PARAMETERS: \1: VECTOR NAME                              
+00001436                           841m *             \2: SIMBOL DESP                              
+00001436                           842m *             \3: VECTOR CURSOR                            
+00001436                           843m * MODIFIES  : D0, D1, D2, A1                                
+00001436                           844m * ALWAYS EXECUTED AFTER TRAP 51, 52 OR 55                   
+00001436                           845m *-----------------------------------------------------------
+0000145A                           846  ******************** ESCRIBIR SIMBOLO EN VECTOR ; pendiente de hacer  ******************** 
+0000145A                           847  ; c3d: escriure_ 18 - 1 
+0000145A                           848m     ASIGN_SIMBOL_VECTOR -8, copiaiguals,copiaigualscursor
+0000145A                           849m * MACRO TO ASSIGN SIMBOL TO VECTOR.                         
+0000145A                           850m * PARAMETERS: \1: SIMBOL DESP                              
+0000145A                           851m *             \2: VECTOR ADDRESS                           
+0000145A                           852m *             \3: VECTOR CURSOR                            
+0000145A                           853m * MODIFIES  : D0,A1                                         
+0000145A                           854m *-----------------------------------------------------------
+00001472                           855m     DRETA entigualscursor
+00001472                           856m * MACRO TO INCREASE IN 1 WORD THE CURSOR OF THE FILE.       
+00001472                           857m * PARAMETERS: \1: VECTOR CURSOR NAME                       
+00001472                           858m * MODIFIES  : D0, A1                                        
+00001472                           859m *-----------------------------------------------------------
+00001480                           860m     DRETA copiaigualscursor
+00001480                           861m * MACRO TO INCREASE IN 1 WORD THE CURSOR OF THE FILE.       
+00001480                           862m * PARAMETERS: \1: VECTOR CURSOR NAME                       
+00001480                           863m * MODIFIES  : D0, A1                                        
+00001480                           864m *-----------------------------------------------------------
+0000148E                           865  ;   saltar a la etiqueta 
+0000148E                           866  ;   c3d: goto_ - - t_while_0_6 
+0000148E  6000 FF2E                867      BRA t_while_0_6   
+00001492                           868  ;   escribir etiqueta 
+00001492                           869  ;   c3d: skip_ - - t_while_0_8 
+00001492                           870  t_while_0_8:
+00001492                           871m     ESQUERRA entigualscursor
+00001492                           872m * MACRO TO INCREASE IN 1 UNIT THE CURSOR OF THE FILE.       
+00001492                           873m * PARAMETERS: \1: VECTOR CURSOR NAME                       
+00001492                           874m * MODIFIES  : D0, A1                                        
+00001492                           875m *-----------------------------------------------------------
+000014A0                           876m     ESQUERRA copiaigualscursor
+000014A0                           877m * MACRO TO INCREASE IN 1 UNIT THE CURSOR OF THE FILE.       
+000014A0                           878m * PARAMETERS: \1: VECTOR CURSOR NAME                       
+000014A0                           879m * MODIFIES  : D0, A1                                        
+000014A0                           880m *-----------------------------------------------------------
+000014AE                           881  ;   escribir etiqueta 
+000014AE                           882  ;   c3d: skip_ - - t_while_0_9 
+000014AE                           883  t_while_0_9:
+000014AE                           884   ****************** READ VECTOR ***************** 
+000014AE                           885m     READ_VECTOR     entiguals, -10, entigualscursor
+000014AE                           886m * MACRO TO READS 1 WORD FROM THE VECTOR ADDRESS             
+000014AE                           887m * PARAMETERS: \1: VECTOR NAME                              
+000014AE                           888m *             \2: SIMBOL DESP                              
+000014AE                           889m *             \3: VECTOR CURSOR                            
+000014AE                           890m * MODIFIES  : D0, D1, D2, A1                                
+000014AE                           891m * ALWAYS EXECUTED AFTER TRAP 51, 52 OR 55                   
+000014AE                           892m *-----------------------------------------------------------
+000014D2                           893  ******************** ASIGNAR SIMBOLO ******************** 
+000014D2                           894  ; c3d: assig_ 35 - 20 
+000014D2                           895m     ASIGN_VALUE_SIMBOL -12, #35
+000014D2                           896m * MACRO TO ASSIGN VALUE TO SIMBOL.                          
+000014D2                           897m * PARAMETERS: \1: PARAM1   ;DESP                           
+000014D2                           898m *             \2: PARAM2   ;VALOR                          
+000014D2                           899m * MODIFIES  : D0                                            
+000014D2                           900m *-----------------------------------------------------------
+000014DC                           901  ;   comparar si son diferentes 
+000014DC                           902  ;   c3d: diferent_ 19 20 21 
+000014DC                           903m     COMP_DIF_SIMBOL -10, -12, -14   
+000014DC                           904m * MACRO TO COMPARE.                          
+000014DC                           905m * PARAMETERS: \1: PARAM1
+000014DC                           906m *             \2: PARAM2
+000014DC                           907m *             \3: PARAM3 
+000014DC                           908m * MODIFIES  : D0
+000014DC                           909m *             D1
+000014DC                           910m *-----------------------------------------------------------
+000014E0                           911m * COMPARAR D0 Y D1
+000014E4                           912m         ; MIRAR QUE D0 ES CORRECTO
+000014F4                           913m         ; MIRAR QUE D0 ES CORRECTO
+00001500                           914m * SI SON IGUALES GUARDAR UN 0 (BOOLEAN FALSE)
+0000150E                           915m * SI SON DIFERENTES GUARDAR UN 1 (BOOLEAN TRUE)
+00001516                           916  ;   condicional if 
+00001516                           917  ;   c3d: if_ 21 - t_while_0_10 
+00001516  302F FFF2                918      MOVE.W  -14(A7),D0 
+0000151A  B07C 0001                919      CMP.W   #1, D0   
+0000151E  6700 0006                920      BEQ t_while_0_10   
+00001522                           921  ;   saltar a la etiqueta 
+00001522                           922  ;   c3d: goto_ - - t_while_0_11 
+00001522  6000 0022                923      BRA t_while_0_11   
+00001526                           924  ;   escribir etiqueta 
+00001526                           925  ;   c3d: skip_ - - t_while_0_10 
+00001526                           926  t_while_0_10:
+00001526                           927m     ESQUERRA entigualscursor
+00001526                           928m * MACRO TO INCREASE IN 1 UNIT THE CURSOR OF THE FILE.       
+00001526                           929m * PARAMETERS: \1: VECTOR CURSOR NAME                       
+00001526                           930m * MODIFIES  : D0, A1                                        
+00001526                           931m *-----------------------------------------------------------
+00001534                           932m     ESQUERRA copiaigualscursor
+00001534                           933m * MACRO TO INCREASE IN 1 UNIT THE CURSOR OF THE FILE.       
+00001534                           934m * PARAMETERS: \1: VECTOR CURSOR NAME                       
+00001534                           935m * MODIFIES  : D0, A1                                        
+00001534                           936m *-----------------------------------------------------------
+00001542                           937  ;   saltar a la etiqueta 
+00001542                           938  ;   c3d: goto_ - - t_while_0_9 
+00001542  6000 FF6A                939      BRA t_while_0_9   
+00001546                           940  ;   escribir etiqueta 
+00001546                           941  ;   c3d: skip_ - - t_while_0_11 
+00001546                           942  t_while_0_11:
+00001546                           943m     DRETA entigualscursor
+00001546                           944m * MACRO TO INCREASE IN 1 WORD THE CURSOR OF THE FILE.       
+00001546                           945m * PARAMETERS: \1: VECTOR CURSOR NAME                       
+00001546                           946m * MODIFIES  : D0, A1                                        
+00001546                           947m *-----------------------------------------------------------
+00001554                           948m     DRETA copiaigualscursor
+00001554                           949m * MACRO TO INCREASE IN 1 WORD THE CURSOR OF THE FILE.       
+00001554                           950m * PARAMETERS: \1: VECTOR CURSOR NAME                       
+00001554                           951m * MODIFIES  : D0, A1                                        
+00001554                           952m *-----------------------------------------------------------
+00001562                           953  ******************** END PROCEDURE ******************** 
+00001562                           954  ;   para salir del subprograma 
+00001562                           955  ;   c3d:    endProcedure_ - - 1 
+00001562  2E4E                     956      MOVE.L  A6,A7       ; EN PRUEBAS 
+00001564  DFFC 00000012            957      ADD.L   #18, A7  ;nos situamos en PC para volver
+0000156A  4E75                     958      RTS
+0000156C                           959                                                  
+0000156C                           960  * Put variables and constants here                   
+0000156C= 30 30 00                 961  accepta         dc.b    '00',0                   
+00001570                           962                  ds.w     0                      
+00001570= 5641 4C4F 5220 4...      963  acceptastr      dc.w    'VALOR DE ACCEPTA: ',0  
+00001584                           964  entiguals     ds.l        1024
+00002584= 00000000                 965  entigualscursor     dc.l        0   
+00002588                           966  copiaiguals     ds.l        1024
+00003588= 00000000                 967  copiaigualscursor     dc.l        0   
+0000358C= 66696C65 732F656E ...    968  ENT             dc.l     'files/ent',0
+0000359C                           969      END    START        ; last line of source    
+
+No errors detected
+No warnings generated
+
+
+SYMBOL TABLE INFORMATION
+Symbol-name         Value
+-------------------------
+ACCEPTA             156C
+ACCEPTASTR          1570
+ASIGN_ACCEPTA_SIMBOL  25EF
+ASIGN_SIMBOL_ACCEPTA  2387
+ASIGN_SIMBOL_SIMBOL  215D
+ASIGN_SIMBOL_VECTOR  2B77
+ASIGN_VALUE_ACCEPTA  1EF5
+ASIGN_VALUE_SIMBOL  1CCB
+ASIGN_VALUE_VECTOR  2819
+BUIDA               39D2
+CIM                 3739
+COMP_DIF_SIMBOL     3284
+COMP_IGUAL_SIMBOL   2ED5
+COPIAIGUALS         2588
+COPIAIGUALSCURSOR   3588
+DESEMPILA           382C
+DIF_ASIG_INT_TRUE_11  11E4
+DIF_ASIG_INT_TRUE_18  12B6
+DIF_ASIG_INT_TRUE_25  1366
+DIF_ASIG_INT_TRUE_30  1422
+DIF_ASIG_INT_TRUE_39  1512
+DIF_ASIG_INT_TRUE_8  1152
+DIF_INT_FALSO_11    11E0
+DIF_INT_FALSO_18    12B2
+DIF_INT_FALSO_25    1362
+DIF_INT_FALSO_30    141E
+DIF_INT_FALSO_39    150E
+DIF_INT_FALSO_8     114E
+DRETA               10FB
+EMPILA              362F
+ENT                 358C
+ENTIGUALS           1584
+ENTIGUALSCURSOR     2584
+ESQUERRA            1365
+INIT_VECTOR         E16
+LOAD_ENT            0
+LOAD_STACK          38E2
+NOBUIDA             3C65
+P_COPIAR            13A8
+P_IGUALS            10A4
+READ_SIMBOL         1A63
+READ_VECTOR         15CF
+SAVE_ENT            72A
+START               1000
+T_IF_0_0            11F8
+T_IF_0_1            1214
+T_IF_0_2            1234
+T_IF_0_3            12CA
+T_IF_0_4            12E6
+T_IF_0_5            139E
+T_WHILE_0_0         10EE
+T_WHILE_0_1         1166
+T_WHILE_0_10        1526
+T_WHILE_0_11        1546
+T_WHILE_0_2         1238
+T_WHILE_0_3         1302
+T_WHILE_0_4         137A
+T_WHILE_0_5         139A
+T_WHILE_0_6         13BE
+T_WHILE_0_7         1436
+T_WHILE_0_8         1492
+T_WHILE_0_9         14AE
+_00000000           1102
+_00000001           110E
+_00000002           1130
+_00000003           1140
+_00000004           117A
+_00000005           1186
+_00000006           119E
+_00000007           11AA
+_00000008           11C2
+_00000009           11D2
+_0000000A           124C
+_0000000B           1258
+_0000000C           1270
+_0000000D           127C
+_0000000E           1294
+_0000000F           12A4
+_00000010           1316
+_00000011           1322
+_00000012           1344
+_00000013           1354
+_00000014           13D2
+_00000015           13DE
+_00000016           1400
+_00000017           1410
+_00000018           144A
+_00000019           1456
+_0000001A           14C2
+_0000001B           14CE
+_0000001C           14F0
+_0000001D           1500
+_10000000           1018
+_10000001           1034
+_10000002           103A
+_10000003           1050
+_10000004           1084
+_10000005           109C

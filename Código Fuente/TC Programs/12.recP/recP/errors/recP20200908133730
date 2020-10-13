@@ -1,0 +1,2 @@
+error: exceptions.SymbolTableException: Error: Symbol Table Exception 5.
+El 'tipus_pila' pia no ha sido declarado.

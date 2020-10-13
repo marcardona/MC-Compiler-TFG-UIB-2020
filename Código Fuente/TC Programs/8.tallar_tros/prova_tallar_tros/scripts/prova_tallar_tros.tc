@@ -1,0 +1,5 @@
+programa prova_tallar_tros (ent) 
+resultat: vector
+    tallar_tros(ent, resultat)
+    escriure(accepta,1)
+fi

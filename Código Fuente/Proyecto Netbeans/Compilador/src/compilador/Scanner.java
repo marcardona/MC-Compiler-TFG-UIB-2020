@@ -17,6 +17,7 @@ import java.io.*;
 import java_cup.runtime.*;
 import java_cup.runtime.ComplexSymbolFactory.ComplexSymbol;
 import compilador.ParserSym;
+import data.Data;
 
 
 // See https://github.com/jflex-de/jflex/issues/222
@@ -732,8 +733,8 @@ public class Scanner implements java_cup.runtime.Scanner {
    *
    * @param   in  the java.io.Reader to read input from.
    */
-  public Scanner(java.io.Reader in) throws FileNotFoundException {
-    this.ps = new PrintStream(new FileOutputStream("Tokens.txt"));
+  public Scanner(java.io.Reader in, Data datos) throws FileNotFoundException {
+    this.ps = new PrintStream(new FileOutputStream(datos.getProjectPath()+"/build/Tokens.txt"));
     this.zzReader = in;
   }
 

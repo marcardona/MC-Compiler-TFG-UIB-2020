@@ -1,0 +1,2 @@
+error: exceptions.SymbolTableException: Error: Symbol Table Exception 10.
+El simbol ii no ha sido declarado.

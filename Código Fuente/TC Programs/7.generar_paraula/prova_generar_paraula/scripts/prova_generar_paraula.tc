@@ -1,0 +1,3 @@
+programa prova_generar_paraula (ent) 
+    generar_paraula(ent)
+fi
